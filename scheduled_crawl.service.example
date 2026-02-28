@@ -1,0 +1,35 @@
+# 定时抓取开机自启：复制本文件并修改路径后启用
+#
+# 用户级服务（推荐，无需 root）：
+#   mkdir -p ~/.config/systemd/user
+#   cp scheduled_crawl.service.example ~/.config/systemd/user/scheduled_crawl.service
+#   编辑 ~/.config/systemd/user/scheduled_crawl.service，把 PROJECT_DIR 改成项目实际路径
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now scheduled_crawl
+#   开机不登录也运行：loginctl enable-linger $USER
+#
+# 系统级服务（需 root）：
+#   sudo cp scheduled_crawl.service.example /etc/systemd/system/scheduled_crawl.service
+#   sudo 编辑 /etc/systemd/system/scheduled_crawl.service 改路径
+#   sudo systemctl daemon-reload && sudo systemctl enable --now scheduled_crawl
+
+[Unit]
+Description=QQMusic Crawler 定时抓取（三平台）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 改成你的项目根目录（即包含 scheduled_crawl.py 的目录）
+WorkingDirectory=PROJECT_DIR
+# 必须用 Python 3.8+（项目要求），且已安装依赖（pip install -e .）
+# 示例：Miniconda 的 python3.8 或 项目 venv：PROJECT_DIR/.venv/bin/python
+ExecStart=/usr/bin/python3.8 scheduled_crawl.py
+Restart=on-failure
+RestartSec=60
+# 日志在 journal：journalctl --user -u scheduled_crawl -f（用户服务）或 journalctl -u scheduled_crawl -f（系统服务）
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
