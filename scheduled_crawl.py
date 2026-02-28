@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-定时任务脚本：依次对 QQ、网易云、酷狗 执行指定歌手的歌曲抓取并追踪。
+定时任务脚本：对 QQ、网易云、酷狗 并行执行指定歌手的歌曲抓取并追踪。
 默认歌手：李宇春。默认每 30 分钟执行一轮并一直后台运行。
 
 后台常驻（推荐）：
@@ -17,6 +17,7 @@ import argparse
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from pathlib import Path
 
@@ -122,29 +123,36 @@ def main() -> int:
         run_count += 1
         run_daily_cleanup()
         started = datetime.now().isoformat()
-        logger.info("第 {} 轮开始 artist={} platforms={} at {}", run_count, artist_name, args.platforms, started)
-        for platform in args.platforms:
-            meta = get_platform_meta(platform)
-            name = meta.get("name", platform)
-            logger.info("开始执行 {} ({})", name, platform)
-            try:
-                result = crawl_track(
+        logger.info("第 {} 轮开始 artist={} platforms={} 多线程并行 at {}", run_count, artist_name, args.platforms, started)
+        max_workers = min(len(args.platforms), 3)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_platform = {
+                executor.submit(
+                    crawl_track,
                     platform=platform,
                     artist_name=artist_name,
                     song_limit=args.song_limit,
-                )
-                if result.get("ok"):
-                    logger.info(
-                        "{} 完成: 保存 {} 首, 歌曲指标变化 {}, 歌手指标变化 {}",
-                        name,
-                        result.get("total_saved", 0),
-                        result.get("metric_changes", 0),
-                        result.get("artist_metric_changes", 0),
-                    )
-                else:
-                    logger.warning("{} 失败: {}", name, result.get("error", "未知错误"))
-            except Exception as e:
-                logger.exception("{} 异常: {}", name, e)
+                ): platform
+                for platform in args.platforms
+            }
+            for future in as_completed(future_to_platform):
+                platform = future_to_platform[future]
+                meta = get_platform_meta(platform)
+                name = meta.get("name", platform)
+                try:
+                    result = future.result()
+                    if result.get("ok"):
+                        logger.info(
+                            "{} 完成: 保存 {} 首, 歌曲指标变化 {}, 歌手指标变化 {}",
+                            name,
+                            result.get("total_saved", 0),
+                            result.get("metric_changes", 0),
+                            result.get("artist_metric_changes", 0),
+                        )
+                    else:
+                        logger.warning("{} 失败: {}", name, result.get("error", "未知错误"))
+                except Exception as e:
+                    logger.exception("{} 异常: {}", name, e)
         logger.info("第 {} 轮结束 at {}", run_count, datetime.now().isoformat())
 
     if args.once:

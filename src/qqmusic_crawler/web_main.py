@@ -15,6 +15,7 @@ from .web_service import (
     check_artist_toplist,
     crawl_track,
     find_artists,
+    get_milestone_logs,
     get_platform_meta,
     get_report,
     get_report_chart_data,
@@ -249,6 +250,13 @@ async def api_crawl_track_start(request: Request) -> JSONResponse:
     )
     thread.start()
     return JSONResponse({"ok": True, "job_id": job_id})
+
+
+@app.get("/api/milestone-logs")
+async def api_milestone_logs(limit: int = 500) -> JSONResponse:
+    """里程碑日志：三平台收藏量节点，按时间倒序。"""
+    data = get_milestone_logs(base_dir=PROJECT_ROOT, limit=limit)
+    return JSONResponse(data)
 
 
 @app.get("/api/report-chart")

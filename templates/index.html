@@ -342,6 +342,27 @@
     </div>
   </div>
 
+  <div class="block">
+    <h3>里程碑</h3>
+    <p class="subtitle">收藏量节点记录（增量&gt;1000 或首次突破阈值时写入），按时间倒序</p>
+    <div id="milestone-log-wrap">
+      <div class="progress-text js-milestone-loading">加载中...</div>
+      <table id="milestone-log-table" style="display:none; margin-top: 8px;">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>平台</th>
+            <th>歌曲名</th>
+            <th>收藏量</th>
+          </tr>
+        </thead>
+        <tbody id="milestone-log-tbody"></tbody>
+      </table>
+      <div id="milestone-log-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
+      <div id="milestone-log-err" class="err" style="display:none;"></div>
+    </div>
+  </div>
+
   {% if result_type == "search-artist" %}
   <div class="block">
     <h3>搜索结果</h3>
@@ -1119,6 +1140,44 @@
         modeEl.addEventListener("change", syncInputByMode);
         syncInputByMode();
       })();
+
+      function loadMilestoneLogs(showLoading) {
+        var loading = document.querySelector(".js-milestone-loading");
+        var table = document.getElementById("milestone-log-table");
+        var tbody = document.getElementById("milestone-log-tbody");
+        var empty = document.getElementById("milestone-log-empty");
+        var errEl = document.getElementById("milestone-log-err");
+        if (!tbody) return;
+        if (showLoading !== false && loading) loading.style.display = "block";
+        if (table) table.style.display = "none";
+        if (empty) empty.style.display = "none";
+        if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+        fetch("/api/milestone-logs?limit=20")
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (loading) loading.style.display = "none";
+            if (!data.ok || !Array.isArray(data.entries)) {
+              if (errEl) { errEl.textContent = data.error || "加载失败"; errEl.style.display = "block"; }
+              return;
+            }
+            var entries = data.entries;
+            if (entries.length === 0) {
+              if (empty) empty.style.display = "block";
+              return;
+            }
+            tbody.innerHTML = entries.map(function (e) {
+              var name = (e.song_name || "-").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+              return "<tr><td>" + (e.time || "") + "</td><td>" + (e.platform_name || e.platform || "") + "</td><td>" + name + "</td><td>" + (e.favorite_count ?? "") + "</td></tr>";
+            }).join("");
+            if (table) table.style.display = "table";
+          })
+          .catch(function () {
+            if (loading) loading.style.display = "none";
+            if (errEl) { errEl.textContent = "请求失败"; errEl.style.display = "block"; }
+          });
+      }
+      loadMilestoneLogs(true);
+      setInterval(function () { loadMilestoneLogs(false); }, 60 * 1000);
     })();
   </script>
   </div>

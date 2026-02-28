@@ -36,8 +36,9 @@ def _append_favorite_milestone_log(log_path: Path, song_name: str, favorite_coun
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         name_safe = (song_name or "").strip().replace("\n", " ").replace("\r", " ") or "-"
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open(log_path, "a", encoding="utf-8") as f:
-            f.write("{} {}\n".format(name_safe, favorite_count))
+            f.write("{} {} {}\n".format(ts, name_safe, favorite_count))
     except OSError:
         pass
 

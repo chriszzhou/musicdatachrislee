@@ -626,6 +626,43 @@ def get_report(
     }
 
 
+def get_milestone_logs(base_dir: Optional[Path] = None, limit: int = 500) -> Dict[str, Any]:
+    """
+    读取三平台收藏量里程碑日志，按时间倒序合并返回。
+    日志行格式：YYYY-MM-DD HH:MM:SS 歌曲名 收藏量
+    """
+    root = base_dir or Path(".")
+    entries: List[Dict[str, Any]] = []
+    for platform in SUPPORTED_PLATFORMS:
+        meta = get_platform_meta(platform)
+        log_path = root / Path(meta["changes_db"]).parent / "milestone_{}.log".format(platform)
+        if not log_path.is_file():
+            continue
+        name = meta.get("name", platform)
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split()
+                    if len(parts) < 3:
+                        continue
+                    try:
+                        ts = "{} {}".format(parts[0], parts[1])
+                        count = int(parts[-1])
+                        song_name = " ".join(parts[2:-1]) if len(parts) > 3 else parts[2]
+                        entries.append(
+                            {"platform": platform, "platform_name": name, "time": ts, "song_name": song_name, "favorite_count": count}
+                        )
+                    except (ValueError, IndexError):
+                        continue
+        except OSError:
+            continue
+    entries.sort(key=lambda x: x["time"], reverse=True)
+    return {"ok": True, "entries": entries[:limit]}
+
+
 def get_report_chart_data(
     platform: str,
     mode: str,
