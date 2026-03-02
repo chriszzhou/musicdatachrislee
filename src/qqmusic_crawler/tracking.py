@@ -21,9 +21,14 @@ def _favorite_milestone_should_log(platform: str, old_v: int, new_v: int, delta:
     if delta > 1000:
         return True
     if platform == "qq":
-        thresholds = [5000, 10000, 50000] + [50000 * k for k in range(2, max(2, new_v // 50000 + 2))]
+        # 5k, 1w, 2w, 5w, 10w, 15w, 20w, ...
+        thresholds = [5000, 10000, 20000, 50000] + [
+            50000 * k for k in range(2, max(2, new_v // 50000 + 2))
+        ]
     else:
-        thresholds = [1000, 5000, 10000] + [10000 * k for k in range(2, max(2, new_v // 10000 + 2))]
+        thresholds = [1000, 5000, 10000] + [
+            10000 * k for k in range(2, max(2, new_v // 10000 + 2))
+        ]
     for t in thresholds:
         if t > new_v:
             break
@@ -116,7 +121,155 @@ def _read_artist_profile(db_file: Path, artist_mid: str) -> Dict[str, object]:
         conn.close()
 
 
+def _month_key(run_at: str) -> str:
+    """从 run_at (YYYY-MM-DD HH:MM:SS) 得到月份键 YYYYMM。"""
+    if not run_at or len(run_at) < 7:
+        return datetime.now().strftime("%Y%m")
+    return run_at[:7].replace("-", "")
+
+
+def _table_name(base: str, month_key: str) -> str:
+    """变化表按月分表名，如 metric_changes_202503。"""
+    return "{}_m{}".format(base, month_key)
+
+
+def _ensure_month_table(conn: sqlite3.Connection, base: str, month_key: str) -> None:
+    """确保指定月份的基表存在（如 metric_changes_m202503）。"""
+    table = _table_name(base, month_key)
+    if base == "song_changes":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS {} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_at TEXT NOT NULL,
+                artist_mid TEXT NOT NULL,
+                song_mid TEXT NOT NULL,
+                song_name TEXT,
+                change_type TEXT NOT NULL,
+                snapshot_db TEXT NOT NULL
+            )
+            """.format(table)
+        )
+    elif base == "metric_changes":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS {} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_at TEXT NOT NULL,
+                artist_mid TEXT NOT NULL,
+                song_mid TEXT NOT NULL,
+                song_name TEXT,
+                metric TEXT NOT NULL,
+                old_value INTEGER NOT NULL,
+                new_value INTEGER NOT NULL,
+                delta INTEGER NOT NULL,
+                snapshot_db TEXT NOT NULL
+            )
+            """.format(table)
+        )
+    elif base == "artist_metric_changes":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS {} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_at TEXT NOT NULL,
+                artist_mid TEXT NOT NULL,
+                artist_name TEXT,
+                metric TEXT NOT NULL,
+                old_value INTEGER NOT NULL,
+                new_value INTEGER NOT NULL,
+                delta INTEGER NOT NULL,
+                snapshot_db TEXT NOT NULL
+            )
+            """.format(table)
+        )
+    conn.commit()
+
+
+def _list_change_month_tables(conn: sqlite3.Connection, base: str) -> List[str]:
+    """列出已存在的某类变化表的所有月份键（如 metric_changes_m202503 -> 202503），按升序。"""
+    prefix = base + "_m"
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?",
+        (prefix + "%",),
+    ).fetchall()
+    month_keys: List[str] = []
+    for (name,) in rows:
+        if name.startswith(prefix) and len(name) > len(prefix):
+            month_keys.append(name[len(prefix) :])
+    month_keys.sort()
+    return month_keys
+
+
+def get_changes_table_for_run_at(base: str, run_at: Optional[str] = None) -> str:
+    """返回某 run_at 对应月份的变化表名（如 metric_changes_m202503）；run_at 为空则用当前时间。"""
+    month_key = _month_key(run_at) if run_at else datetime.now().strftime("%Y%m")
+    return _table_name(base, month_key)
+
+
+def _has_legacy_metric_changes_table(conn: sqlite3.Connection) -> bool:
+    """是否存在旧版单表 metric_changes（未分表）。"""
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='metric_changes'"
+        ).fetchone()
+        is not None
+    )
+
+
+def fetch_metric_changes_all(
+    conn: sqlite3.Connection,
+    where_sql: str = "1=1",
+    params: Tuple[object, ...] = (),
+    order_asc: bool = True,
+    columns: str = "run_at, song_name, song_mid, old_value, new_value, delta",
+) -> List[object]:
+    """
+    从 metric_changes 或所有月度分表中查询，兼容旧版单表与按月分表。
+    返回按 run_at 排序的行列表（Row 或 tuple 取决于 conn.row_factory）。
+    """
+    if _has_legacy_metric_changes_table(conn):
+        sql = "SELECT {} FROM metric_changes WHERE {} ORDER BY run_at {}".format(
+            columns, where_sql, "ASC" if order_asc else "DESC"
+        )
+        return conn.execute(sql, params).fetchall()
+    month_keys = _list_change_month_tables(conn, "metric_changes")
+    if not month_keys:
+        return []
+    rows: List[object] = []
+    for mk in month_keys:
+        table = _table_name("metric_changes", mk)
+        sql = "SELECT {} FROM {} WHERE {}".format(columns, table, where_sql)
+        rows.extend(conn.execute(sql, params).fetchall())
+    if not rows:
+        return []
+    # 按 run_at 排序（支持 sqlite3.Row 与 tuple）
+    def _run_at(r: object) -> str:
+        if hasattr(r, "keys") and hasattr(r, "__getitem__"):
+            try:
+                k = r.keys() if callable(getattr(r, "keys", None)) else []
+                if "run_at" in (list(k) if not isinstance(k, list) else k):
+                    return str(r["run_at"] or "")
+            except Exception:
+                pass
+        if isinstance(r, (list, tuple)) and len(r) > 0:
+            return str(r[0] or "")
+        return ""
+
+    rows.sort(key=_run_at, reverse=not order_asc)
+    return rows
+
+
 def _ensure_changes_tables(conn: sqlite3.Connection) -> None:
+    """确保至少有一个月份的变化表存在（使用当前月），兼容旧代码调用。"""
+    month_key = datetime.now().strftime("%Y%m")
+    _ensure_month_table(conn, "metric_changes", month_key)
+    _ensure_month_table(conn, "artist_metric_changes", month_key)
+    _ensure_month_table(conn, "song_changes", month_key)
+
+
+def _ensure_legacy_changes_tables(conn: sqlite3.Connection) -> None:
+    """仅用于迁移：创建旧版单表（无分表时使用）。"""
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS song_changes (
@@ -171,19 +324,22 @@ def _insert_song_change_rows(
     snapshot_db: str,
     rows: Iterable[Tuple[str, str, str]],
 ) -> int:
+    if not rows:
+        return 0
+    month_key = _month_key(run_at)
+    _ensure_month_table(conn, "song_changes", month_key)
+    table = _table_name("song_changes", month_key)
     payload = [
         (run_at, artist_mid, song_mid, song_name, change_type, snapshot_db)
         for song_mid, song_name, change_type in rows
     ]
-    if not payload:
-        return 0
     conn.executemany(
         """
-        INSERT INTO song_changes (
+        INSERT INTO {} (
             run_at, artist_mid, song_mid, song_name, change_type, snapshot_db
         )
         VALUES (?, ?, ?, ?, ?, ?)
-        """,
+        """.format(table),
         payload,
     )
     conn.commit()
@@ -203,14 +359,17 @@ def _insert_metric_change_rows(
     ]
     if not payload:
         return 0
+    month_key = _month_key(run_at)
+    _ensure_month_table(conn, "metric_changes", month_key)
+    table = _table_name("metric_changes", month_key)
     conn.executemany(
         """
-        INSERT INTO metric_changes (
+        INSERT INTO {} (
             run_at, artist_mid, song_mid, song_name, metric,
             old_value, new_value, delta, snapshot_db
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        """.format(table),
         payload,
     )
     conn.commit()
@@ -230,14 +389,17 @@ def _insert_artist_metric_change_rows(
     ]
     if not payload:
         return 0
+    month_key = _month_key(run_at)
+    _ensure_month_table(conn, "artist_metric_changes", month_key)
+    table = _table_name("artist_metric_changes", month_key)
     conn.executemany(
         """
-        INSERT INTO artist_metric_changes (
+        INSERT INTO {} (
             run_at, artist_mid, artist_name, metric,
             old_value, new_value, delta, snapshot_db
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        """.format(table),
         payload,
     )
     conn.commit()
@@ -273,6 +435,7 @@ def track_changes_for_artist(
 
     platform = _platform_from_changes_db(changes_db_file)
     milestone_log = changes_db_file.parent / "milestone_{}.log".format(platform)
+    milestone_entries: List[Tuple[str, int]] = []
 
     for song_mid in sorted(current_keys & previous_keys):
         curr_item = current[song_mid]
@@ -297,6 +460,7 @@ def track_changes_for_artist(
                     platform, old_v, new_v, delta
                 ):
                     _append_favorite_milestone_log(milestone_log, song_name, new_v)
+                    milestone_entries.append((song_name, new_v))
 
     old_fans = int(previous_artist.get("fans", 0) or 0)
     new_fans = int(current_artist.get("fans", 0) or 0)
@@ -337,7 +501,26 @@ def track_changes_for_artist(
         "song_changes": 0,
         "metric_changes": metric_changes_count,
         "artist_metric_changes": artist_metric_changes_count,
+        "milestones": milestone_entries,
     }
+
+
+def _report_month_keys(
+    conn: sqlite3.Connection,
+    base: str,
+    year_str: Optional[str],
+    month_str: Optional[str],
+    date_str: Optional[str],
+) -> List[str]:
+    """确定 report 要查询的月份键列表（分表用）。"""
+    if year_str:
+        all_months = _list_change_month_tables(conn, base)
+        return [m for m in all_months if m.startswith(year_str)]
+    if month_str:
+        return [month_str.replace("-", "")]
+    if date_str:
+        return [date_str[:7].replace("-", "")]
+    return [datetime.now().strftime("%Y%m")]
 
 
 def report_changes(
@@ -356,6 +539,17 @@ def report_changes(
     conn.row_factory = sqlite3.Row
     try:
         _ensure_changes_tables(conn)
+        month_keys_metric = _report_month_keys(
+            conn, "metric_changes", year_str, month_str, date_str
+        )
+        month_keys_artist = _report_month_keys(
+            conn, "artist_metric_changes", year_str, month_str, date_str
+        )
+        if not month_keys_metric:
+            month_keys_metric = [datetime.now().strftime("%Y%m")]
+        if not month_keys_artist:
+            month_keys_artist = [datetime.now().strftime("%Y%m")]
+
         if year_str:
             where_sql = "substr(run_at, 1, 4) = ?"
             base_params: List[object] = [year_str]
@@ -366,35 +560,70 @@ def report_changes(
             where_sql = "date(run_at) = ?"
             base_params = [date_str or datetime.now().strftime("%Y-%m-%d")]
 
-        metric_sql = """
-            SELECT run_at, artist_mid, song_mid, song_name, metric,
-                   old_value, new_value, delta, snapshot_db
-            FROM metric_changes
-            WHERE
-        """
-        metric_sql += where_sql
-        params: List[object] = list(base_params)
-        if artist_mid:
-            metric_sql += " AND artist_mid = ?"
-            params.append(artist_mid)
-        metric_sql += " ORDER BY id DESC LIMIT ?"
-        metric_rows = conn.execute(metric_sql, params + [limit]).fetchall()
+        def _run_metric_report() -> List[object]:
+            if len(month_keys_metric) == 1:
+                table = _table_name("metric_changes", month_keys_metric[0])
+                sql = """
+                    SELECT run_at, artist_mid, song_mid, song_name, metric,
+                           old_value, new_value, delta, snapshot_db
+                    FROM {}
+                    WHERE {}
+                """.format(table, where_sql)
+                params: List[object] = list(base_params)
+                if artist_mid:
+                    sql += " AND artist_mid = ?"
+                    params.append(artist_mid)
+                sql += " ORDER BY id DESC LIMIT ?"
+                params.append(limit)
+                return conn.execute(sql, params).fetchall()
+            parts = []
+            for mk in month_keys_metric:
+                table = _table_name("metric_changes", mk)
+                part = """
+                    SELECT run_at, artist_mid, song_mid, song_name, metric,
+                           old_value, new_value, delta, snapshot_db FROM {}
+                """.format(table)
+                if artist_mid:
+                    part += " WHERE artist_mid = ?"
+                parts.append(part)
+            union_sql = " UNION ALL ".join(parts)
+            sql = "SELECT * FROM ({}) ORDER BY run_at DESC LIMIT ?".format(union_sql)
+            params = ([artist_mid] * len(month_keys_metric) if artist_mid else []) + [limit]
+            return conn.execute(sql, params).fetchall()
 
-        artist_metric_sql = """
-            SELECT run_at, artist_mid, artist_name, metric,
-                   old_value, new_value, delta, snapshot_db
-            FROM artist_metric_changes
-            WHERE
-        """
-        artist_metric_sql += where_sql
-        artist_metric_params: List[object] = list(base_params)
-        if artist_mid:
-            artist_metric_sql += " AND artist_mid = ?"
-            artist_metric_params.append(artist_mid)
-        artist_metric_sql += " ORDER BY id DESC LIMIT ?"
-        artist_metric_rows = conn.execute(
-            artist_metric_sql, artist_metric_params + [limit]
-        ).fetchall()
+        def _run_artist_report() -> List[object]:
+            if len(month_keys_artist) == 1:
+                table = _table_name("artist_metric_changes", month_keys_artist[0])
+                sql = """
+                    SELECT run_at, artist_mid, artist_name, metric,
+                           old_value, new_value, delta, snapshot_db
+                    FROM {}
+                    WHERE {}
+                """.format(table, where_sql)
+                params = list(base_params)
+                if artist_mid:
+                    sql += " AND artist_mid = ?"
+                    params.append(artist_mid)
+                sql += " ORDER BY id DESC LIMIT ?"
+                params.append(limit)
+                return conn.execute(sql, params).fetchall()
+            parts = []
+            for mk in month_keys_artist:
+                table = _table_name("artist_metric_changes", mk)
+                part = """
+                    SELECT run_at, artist_mid, artist_name, metric,
+                           old_value, new_value, delta, snapshot_db FROM {}
+                """.format(table)
+                if artist_mid:
+                    part += " WHERE artist_mid = ?"
+                parts.append(part)
+            union_sql = " UNION ALL ".join(parts)
+            sql = "SELECT * FROM ({}) ORDER BY run_at DESC LIMIT ?".format(union_sql)
+            params = ([artist_mid] * len(month_keys_artist) if artist_mid else []) + [limit]
+            return conn.execute(sql, params).fetchall()
+
+        metric_rows = _run_metric_report()
+        artist_metric_rows = _run_artist_report()
     finally:
         conn.close()
 

@@ -46,6 +46,7 @@ class Song(Base):
     comment_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     favorite_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     favorite_count_text: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    mixsongid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     raw_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False), server_default=func.now(), nullable=False

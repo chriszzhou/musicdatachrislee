@@ -142,6 +142,13 @@
     }
     tr:last-child td { border-bottom: none; }
     tr:nth-child(even) td { background: #fafcff; }
+    table td a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+    table td a:hover {
+      text-decoration: underline;
+    }
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -173,6 +180,13 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+    .chart-label a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+    .chart-label a:hover {
+      text-decoration: underline;
     }
     .chart-track {
       height: 10px;
@@ -259,7 +273,21 @@
   </div>
 
   <div class="block">
-    <h3>2) 获取歌曲列表</h3>
+    <h3>2) 歌曲搜索</h3>
+    <p class="subtitle">从当前平台最新一次快照中搜索，匹配歌曲名或专辑名包含关键词的结果</p>
+    <form method="post" action="/action/search-songs" class="row js-progress-form" data-progress-label="歌曲搜索中">
+      <input type="hidden" name="platform" value="{{ platform }}" />
+      <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" />
+      <button type="submit">搜索</button>
+    </form>
+    <div class="progress-wrap js-progress-wrap">
+      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
+      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>3) 获取歌曲列表</h3>
     <form method="post" action="/action/crawl-track" id="crawl-track-form" class="row js-progress-form js-async-crawl-form" data-progress-label="获取歌曲列表中">
       <input type="hidden" name="platform" value="{{ platform }}" />
       <input type="text" name="artist_name" placeholder="输入歌手名" value="{{ form.get('artist_name', '') }}" />
@@ -283,7 +311,7 @@
   </div>
 
   <div class="block">
-    <h3>3) 歌手数据变化</h3>
+    <h3>4) 歌手数据变化</h3>
     <form method="post" action="/action/report-changes" class="row js-progress-form" data-progress-label="生成变化报告中">
       <input type="hidden" name="platform" value="{{ platform }}" />
       <select id="report-mode" name="report_mode">
@@ -315,7 +343,7 @@
   </div>
 
   <div class="block">
-    <h3>4) 歌手上榜检查</h3>
+    <h3>5) 歌手上榜检查</h3>
     <form method="post" action="/action/check-toplist" class="row js-progress-form" data-progress-label="上榜检查中">
       <input type="hidden" name="platform" value="{{ platform }}" />
       <input type="hidden" name="toplist_top_n" value="300" />
@@ -329,7 +357,7 @@
   </div>
 
   <div class="block">
-    <h3>5) 歌曲TOP N</h3>
+    <h3>6) 歌曲TOP N</h3>
     <form method="post" action="/action/top-songs" class="row js-progress-form" data-progress-label="查询TOP N中">
       <input type="hidden" name="platform" value="{{ platform }}" />
       <input type="text" name="topsongs_artist_name" placeholder="输入歌手名" value="{{ form.get('topsongs_artist_name', '') }}" />
@@ -385,6 +413,41 @@
       </table>
     {% else %}
       <div>无匹配结果。</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if result_type == "search-songs" %}
+  <div class="block">
+    <h3>歌曲搜索结果</h3>
+    {% if result.get("ok") %}
+      <div class="subtitle">快照：{{ result.get("snapshot_name", "") }}，关键词「{{ result.get("keyword", "") }}」</div>
+      {% if result.get("rows") %}
+      <table>
+        <thead>
+          <tr>
+            <th>歌曲名</th>
+            <th>专辑名</th>
+            <th>评论量</th>
+            <th>收藏量</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in result.get("rows", []) %}
+          <tr>
+            <td>{% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</td>
+            <td>{{ row.get("album_name") }}</td>
+            <td>{{ row.get("comment_count") }}</td>
+            <td>{{ row.get("favorite_count") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div>未匹配到歌曲。</div>
+      {% endif %}
+    {% else %}
+      <div class="err">{{ result.get("error", "搜索失败") }}</div>
     {% endif %}
   </div>
   {% endif %}
@@ -605,7 +668,7 @@
         {% for row in favorites %}
         {% set width = ((row.get("value") or 0) * 100 / (max_fav or 1)) %}
         <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {{ row.get("song_name") }}</div>
+          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</div>
           <div class="chart-track"><div class="chart-fill chart-fill-fav" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
           <div class="chart-value">{{ row.get("value") }}</div>
         </div>
@@ -623,7 +686,7 @@
         {% for row in comments %}
         {% set width = ((row.get("value") or 0) * 100 / (max_comment or 1)) %}
         <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {{ row.get("song_name") }}</div>
+          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</div>
           <div class="chart-track"><div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
           <div class="chart-value">{{ row.get("value") }}</div>
         </div>

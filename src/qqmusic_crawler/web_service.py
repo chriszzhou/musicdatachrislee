@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from loguru import logger
+
 from .client import QQMusicClient
 from .config import settings
 from .crawler import CrawlerService
@@ -12,7 +14,14 @@ from .kugou_client import KugouMusicClient
 from .netease_client import NeteaseMusicClient
 from .storage import Storage
 from .toplist_storage import query_artist_toplist_hits, upsert_artist_toplist_hits
-from .tracking import _ensure_changes_tables, report_changes, track_changes_for_artist
+from .tracking import (
+    _ensure_changes_tables,
+    _report_month_keys,
+    _table_name,
+    get_changes_table_for_run_at,
+    report_changes,
+    track_changes_for_artist,
+)
 
 SUPPORTED_PLATFORMS = ("qq", "netease", "kugou")
 
@@ -283,6 +292,13 @@ def crawl_track(
             changes_db_file=Path(meta["changes_db"]),
             artist_mid=artist_mid,
         )
+        for song_name, count in result.get("milestones", []):
+            logger.info(
+                "{} 收藏里程碑: {} {}",
+                meta.get("name", platform),
+                song_name,
+                count,
+            )
         _emit(96, "变化追踪完成，正在汇总明细")
         metric_field_changes: List[Dict[str, Any]] = []
         artist_metric_field_changes: List[Dict[str, Any]] = []
@@ -290,15 +306,18 @@ def crawl_track(
         artist_metric_change_rows: List[Dict[str, Any]] = []
         changes_conn = sqlite3.connect(str(Path(meta["changes_db"])))
         try:
+            _ensure_changes_tables(changes_conn)
+            tbl_metric = get_changes_table_for_run_at("metric_changes")
+            tbl_artist = get_changes_table_for_run_at("artist_metric_changes")
             cur = changes_conn.cursor()
             metric_rows = cur.execute(
                 """
                 SELECT metric, COUNT(*) AS cnt, COALESCE(SUM(delta), 0) AS delta_sum
-                FROM metric_changes
+                FROM {}
                 WHERE artist_mid = ? AND snapshot_db = ?
                 GROUP BY metric
                 ORDER BY metric ASC
-                """,
+                """.format(tbl_metric),
                 (artist_mid, snapshot_file.as_posix()),
             ).fetchall()
             for metric, cnt, delta_sum in metric_rows:
@@ -313,11 +332,11 @@ def crawl_track(
             artist_metric_rows = cur.execute(
                 """
                 SELECT metric, COUNT(*) AS cnt, COALESCE(SUM(delta), 0) AS delta_sum
-                FROM artist_metric_changes
+                FROM {}
                 WHERE artist_mid = ? AND snapshot_db = ?
                 GROUP BY metric
                 ORDER BY metric ASC
-                """,
+                """.format(tbl_artist),
                 (artist_mid, snapshot_file.as_posix()),
             ).fetchall()
             for metric, cnt, delta_sum in artist_metric_rows:
@@ -332,11 +351,11 @@ def crawl_track(
             detail_rows = cur.execute(
                 """
                 SELECT song_name, song_mid, metric, old_value, new_value, delta
-                FROM metric_changes
+                FROM {}
                 WHERE artist_mid = ? AND snapshot_db = ?
                 ORDER BY ABS(delta) DESC, delta DESC, id DESC
                 LIMIT 200
-                """,
+                """.format(tbl_metric),
                 (artist_mid, snapshot_file.as_posix()),
             ).fetchall()
             for song_name, song_mid, metric, old_value, new_value, delta in detail_rows:
@@ -354,11 +373,11 @@ def crawl_track(
             artist_detail_rows = cur.execute(
                 """
                 SELECT artist_name, metric, old_value, new_value, delta
-                FROM artist_metric_changes
+                FROM {}
                 WHERE artist_mid = ? AND snapshot_db = ?
                 ORDER BY ABS(delta) DESC, delta DESC, id DESC
                 LIMIT 100
-                """,
+                """.format(tbl_artist),
                 (artist_mid, snapshot_file.as_posix()),
             ).fetchall()
             for artist_name, metric, old_value, new_value, delta in artist_detail_rows:
@@ -709,6 +728,28 @@ def get_report_chart_data(
     conn.row_factory = sqlite3.Row
     try:
         _ensure_changes_tables(conn)
+        month_keys_metric = _report_month_keys(
+            conn, "metric_changes", year_str, month_str, date_str
+        )
+        month_keys_artist = _report_month_keys(
+            conn, "artist_metric_changes", year_str, month_str, date_str
+        )
+        if not month_keys_metric:
+            month_keys_metric = [datetime.now().strftime("%Y%m")]
+        if not month_keys_artist:
+            month_keys_artist = [datetime.now().strftime("%Y%m")]
+
+        def _from_clause(base: str, keys: List[str]) -> str:
+            if len(keys) == 1:
+                return _table_name(base, keys[0])
+            parts = [
+                "SELECT * FROM {}".format(_table_name(base, mk)) for mk in keys
+            ]
+            return "({}) AS {}".format(" UNION ALL ".join(parts), base)
+
+        metric_from = _from_clause("metric_changes", month_keys_metric)
+        artist_from = _from_clause("artist_metric_changes", month_keys_artist)
+
         if year_str:
             where_sql = "substr(run_at, 1, 4) = ?"
             group_sql = "substr(run_at, 1, 7)"
@@ -729,8 +770,8 @@ def get_report_chart_data(
         artist_filter = " AND artist_mid = ?" if (artist_mid or "").strip() else ""
 
         labels_sql = (
-            "SELECT {} AS period FROM metric_changes WHERE {} {} GROUP BY period ORDER BY period".format(
-                group_sql, where_sql, artist_filter
+            "SELECT {} AS period FROM {} WHERE {} {} GROUP BY period ORDER BY period".format(
+                group_sql, metric_from, where_sql, artist_filter
             )
         )
         labels_rows = conn.execute(labels_sql, params).fetchall()
@@ -757,9 +798,9 @@ def get_report_chart_data(
             comment_row = conn.execute(
                 """
                 SELECT COALESCE(SUM(delta), 0) AS s
-                FROM metric_changes
+                FROM {}
                 WHERE {} {} AND metric = 'comment_count'
-                """.format(period_where, artist_filter),
+                """.format(metric_from, period_where, artist_filter),
                 period_params,
             ).fetchone()
             series_comment.append(int(comment_row[0] or 0))
@@ -767,9 +808,9 @@ def get_report_chart_data(
             fav_row = conn.execute(
                 """
                 SELECT COALESCE(SUM(delta), 0) AS s
-                FROM metric_changes
+                FROM {}
                 WHERE {} {} AND metric = 'favorite_count_text'
-                """.format(period_where, artist_filter),
+                """.format(metric_from, period_where, artist_filter),
                 period_params,
             ).fetchone()
             series_favorite.append(int(fav_row[0] or 0))
@@ -777,9 +818,9 @@ def get_report_chart_data(
             fans_row = conn.execute(
                 """
                 SELECT COALESCE(SUM(delta), 0) AS s
-                FROM artist_metric_changes
+                FROM {}
                 WHERE {} {} AND metric = 'fans'
-                """.format(period_where, artist_filter),
+                """.format(artist_from, period_where, artist_filter),
                 period_params,
             ).fetchone()
             series_fans.append(int(fans_row[0] or 0))
@@ -803,10 +844,10 @@ def get_report_chart_data(
             for row in conn.execute(
                 """
                 SELECT song_mid, song_name, COALESCE(SUM(delta), 0) AS s
-                FROM metric_changes
+                FROM {}
                 WHERE {} {} AND metric = 'comment_count'
                 GROUP BY song_mid
-                """.format(period_where, artist_filter),
+                """.format(metric_from, period_where, artist_filter),
                 period_params,
             ).fetchall():
                 mid = str(row[0] or "").strip()
@@ -823,10 +864,10 @@ def get_report_chart_data(
             for row in conn.execute(
                 """
                 SELECT song_mid, song_name, COALESCE(SUM(delta), 0) AS s
-                FROM metric_changes
+                FROM {}
                 WHERE {} {} AND metric = 'favorite_count_text'
                 GROUP BY song_mid
-                """.format(period_where, artist_filter),
+                """.format(metric_from, period_where, artist_filter),
                 period_params,
             ).fetchall():
                 mid = str(row[0] or "").strip()
@@ -874,6 +915,76 @@ def get_report_chart_data(
         return {"ok": False, "error": "数据查询异常: {}".format(str(e))}
     finally:
         conn.close()
+
+
+def _ensure_songs_mixsongid(conn: sqlite3.Connection) -> None:
+    """若 songs 表无 mixsongid 列则添加（兼容旧快照）。"""
+    cur = conn.execute("PRAGMA table_info(songs)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "mixsongid" not in cols:
+        conn.execute("ALTER TABLE songs ADD COLUMN mixsongid INTEGER")
+        conn.commit()
+
+
+def search_songs(
+    platform: str,
+    keyword: str,
+    base_dir: Optional[Path] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    """
+    从当前平台最新一次快照中搜索歌曲。
+    匹配规则：歌曲名或专辑名包含关键词即匹配（LIKE %keyword%）。
+    返回：歌曲名、专辑名、评论量、收藏量；QQ 平台可点击歌名跳转热度页。
+    """
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return {"ok": False, "error": "请输入搜索关键词。"}
+    meta = get_platform_meta(platform)
+    root = base_dir or Path(".")
+    snapshots_dir = root / meta["snapshots_dir"]
+    prefix = meta["snapshot_prefix"]
+    pattern = "{}_*.db".format(prefix)
+    if not snapshots_dir.is_dir():
+        return {"ok": False, "error": "暂无快照目录，请先执行抓取。"}
+    candidates = list(snapshots_dir.glob(pattern))
+    if not candidates:
+        return {"ok": False, "error": "未找到任何快照，请先执行抓取。"}
+    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    limit_safe = min(max(1, limit), 500)
+    like_arg = "%{}%".format(keyword)
+    conn = sqlite3.connect(str(latest))
+    try:
+        _ensure_songs_mixsongid(conn)
+        cur = conn.execute(
+            """
+            SELECT song_mid, name, album_name, comment_count, favorite_count_text, mixsongid
+            FROM songs
+            WHERE (name LIKE ? OR (album_name IS NOT NULL AND album_name LIKE ?))
+            ORDER BY COALESCE(favorite_count_text, 0) DESC, song_mid ASC
+            LIMIT ?
+            """,
+            (like_arg, like_arg, limit_safe),
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return {
+        "ok": True,
+        "snapshot_name": latest.name,
+        "keyword": keyword,
+        "rows": [
+            {
+                "song_mid": r[0] or "",
+                "song_name": (r[1] or r[0] or "").strip() or "-",
+                "album_name": (r[2] or "").strip() or "-",
+                "comment_count": int(r[3]) if r[3] is not None else 0,
+                "favorite_count": int(r[4]) if r[4] is not None else 0,
+                "mixsongid": int(r[5]) if len(r) > 5 and r[5] is not None else None,
+            }
+            for r in rows
+        ],
+    }
 
 
 def check_artist_toplist(platform: str, artist_name: str, top_n: int = 300) -> Dict[str, Any]:
@@ -932,10 +1043,11 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
 
     conn = sqlite3.connect(str(latest))
     try:
+        _ensure_songs_mixsongid(conn)
         cur = conn.cursor()
         fav_rows = cur.execute(
             """
-            SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text
+            SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid
             FROM songs
             WHERE artist_mid = ?
             ORDER BY favorite_count_text DESC, song_mid ASC
@@ -945,7 +1057,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
         ).fetchall()
         comment_rows = cur.execute(
             """
-            SELECT song_mid, name, COALESCE(comment_count, 0) AS comment_count
+            SELECT song_mid, name, COALESCE(comment_count, 0) AS comment_count, mixsongid
             FROM songs
             WHERE artist_mid = ?
             ORDER BY comment_count DESC, song_mid ASC
@@ -967,6 +1079,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
                 "song_mid": r[0],
                 "song_name": r[1] or r[0],
                 "value": int(r[2] or 0),
+                "mixsongid": int(r[3]) if len(r) > 3 and r[3] is not None else None,
             }
             for i, r in enumerate(fav_rows)
         ],
@@ -976,6 +1089,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
                 "song_mid": r[0],
                 "song_name": r[1] or r[0],
                 "value": int(r[2] or 0),
+                "mixsongid": int(r[3]) if len(r) > 3 and r[3] is not None else None,
             }
             for i, r in enumerate(comment_rows)
         ],

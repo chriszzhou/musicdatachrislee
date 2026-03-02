@@ -127,13 +127,14 @@ class KugouMusicClient:
         path: str,
         params: Dict[str, Any],
         x_router: str,
+        base_url: str = "https://gateway.kugou.com",
     ) -> Dict[str, Any]:
         default = self._signed_default_params()
         merged = {**default, **params}
         merged["signature"] = self._signature_web(merged)
         headers = self._signed_common_headers(int(default["clienttime"]))
         headers["x-router"] = x_router
-        url = "https://gateway.kugou.com{}".format(path)
+        url = "{}{}".format(base_url.rstrip("/"), path)
         for attempt in Retrying(
             retry=retry_if_exception_type(httpx.HTTPError),
             wait=wait_exponential(multiplier=0.5, min=0.5, max=8),
@@ -196,7 +197,6 @@ class KugouMusicClient:
                 resp.raise_for_status()
                 return resp.json()
         return {}
-
 
     def fetch_artists(self, page: int, page_size: int) -> List[Dict[str, Any]]:
         # Public singer list endpoint is unstable; use empty fallback.
@@ -460,9 +460,6 @@ class KugouMusicClient:
                 if mid > 0:
                     result[mid] = cnt
         return result
-
-    def _fetch_song_heats_batch(self, song_hashes: List[str]) -> Dict[str, int]:
-        return {}
 
     def fetch_toplists(self) -> List[Dict[str, Any]]:
         data = self._get_json("/rank/list", {"json": "true"}, host="https://m.kugou.com")

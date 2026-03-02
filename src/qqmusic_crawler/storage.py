@@ -52,6 +52,8 @@ class Storage:
                 conn.execute(text("ALTER TABLE songs ADD COLUMN favorite_count INTEGER"))
             if "favorite_count_text" not in cols:
                 conn.execute(text("ALTER TABLE songs ADD COLUMN favorite_count_text INTEGER"))
+            if "mixsongid" not in cols:
+                conn.execute(text("ALTER TABLE songs ADD COLUMN mixsongid INTEGER"))
 
     def upsert_artists(self, artists: Iterable[Dict[str, Any]]) -> int:
         count = 0
@@ -106,6 +108,14 @@ class Storage:
                 if not album_name:
                     album_name = item.get("albumname")
 
+                mixsongid_raw = item.get("mixsongid")
+                mixsongid_val = None
+                if mixsongid_raw is not None:
+                    try:
+                        mixsongid_val = int(mixsongid_raw)
+                    except (TypeError, ValueError):
+                        pass
+
                 song = Song(
                     song_mid=song_mid,
                     song_id=item.get("id"),
@@ -117,6 +127,7 @@ class Storage:
                     comment_count=item.get("_metric_comment_count"),
                     favorite_count=None,
                     favorite_count_text=item.get("_metric_favorite_count_text"),
+                    mixsongid=mixsongid_val,
                     raw_json=to_json(item),
                 )
                 session.merge(song)

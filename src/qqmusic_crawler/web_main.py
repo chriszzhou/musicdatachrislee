@@ -21,6 +21,7 @@ from .web_service import (
     get_report_chart_data,
     get_top_songs,
     normalize_platform,
+    search_songs,
 )
 
 app = FastAPI(title="Music Crawler Web")
@@ -135,6 +136,20 @@ async def run_action(action: str, request: Request) -> HTMLResponse:
             context["result_type"] = "search-artist"
             context["result"] = data
             context["message"] = "已完成歌手搜索。"
+        elif action == "search-songs":
+            song_keyword = str(form.get("song_keyword") or "").strip()
+            data = search_songs(
+                platform=platform,
+                keyword=song_keyword,
+                base_dir=PROJECT_ROOT,
+                limit=200,
+            )
+            context["result_type"] = "search-songs"
+            context["result"] = data
+            if data.get("ok"):
+                context["message"] = "歌曲搜索完成。"
+            else:
+                context["error"] = str(data.get("error") or "歌曲搜索失败。")
         elif action == "crawl-track":
             artist_name = str(form.get("artist_name") or "").strip()
             song_count_raw = str(form.get("song_count") or "").strip()
