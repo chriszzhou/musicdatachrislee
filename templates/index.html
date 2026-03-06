@@ -373,6 +373,16 @@
   <div class="block">
     <h3>里程碑</h3>
     <p class="subtitle">收藏量节点记录（增量&gt;1000 或首次突破阈值时写入），按时间倒序</p>
+    <p class="subtitle" style="margin-top: 4px;">
+      <label>平台：</label>
+      <select id="milestone-outlier-platform">
+        <option value="qq">QQ音乐</option>
+        <option value="netease">网易云音乐</option>
+        <option value="kugou" selected>酷狗音乐</option>
+      </select>
+      <button type="button" id="milestone-remove-outliers-btn" class="btn">剔除异常数据</button>
+      <span id="milestone-outlier-msg" class="subtitle" style="margin-left: 8px;"></span>
+    </p>
     <div id="milestone-log-wrap">
       <div class="progress-text js-milestone-loading">加载中...</div>
       <table id="milestone-log-table" style="display:none; margin-top: 8px;">
@@ -382,6 +392,7 @@
             <th>平台</th>
             <th>歌曲名</th>
             <th>收藏量</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody id="milestone-log-tbody"></tbody>
@@ -435,7 +446,7 @@
         <tbody>
           {% for row in result.get("rows", []) %}
           <tr>
-            <td>{% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</td>
+            <td>{% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
             <td>{{ row.get("album_name") }}</td>
             <td>{{ row.get("comment_count") }}</td>
             <td>{{ row.get("favorite_count") }}</td>
@@ -668,7 +679,7 @@
         {% for row in favorites %}
         {% set width = ((row.get("value") or 0) * 100 / (max_fav or 1)) %}
         <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</div>
+          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</div>
           <div class="chart-track"><div class="chart-fill chart-fill-fav" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
           <div class="chart-value">{{ row.get("value") }}</div>
         </div>
@@ -686,7 +697,7 @@
         {% for row in comments %}
         {% set width = ((row.get("value") or 0) * 100 / (max_comment or 1)) %}
         <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" and row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}</div>
+          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</div>
           <div class="chart-track"><div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
           <div class="chart-value">{{ row.get("value") }}</div>
         </div>
@@ -1230,9 +1241,34 @@
             }
             tbody.innerHTML = entries.map(function (e) {
               var name = (e.song_name || "-").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-              return "<tr><td>" + (e.time || "") + "</td><td>" + (e.platform_name || e.platform || "") + "</td><td>" + name + "</td><td>" + (e.favorite_count ?? "") + "</td></tr>";
+              var nameAttr = (e.song_name || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+              return "<tr><td>" + (e.time || "") + "</td><td>" + (e.platform_name || e.platform || "") + "</td><td>" + name + "</td><td>" + (e.favorite_count ?? "") + "</td><td><button type=\"button\" class=\"btn milestone-delete-btn\" data-platform=\"" + (e.platform || "") + "\" data-time=\"" + (e.time || "").replace(/"/g, "&quot;") + "\" data-song-name=\"" + nameAttr + "\" data-favorite-count=\"" + (e.favorite_count ?? "") + "\">删除</button></td></tr>";
             }).join("");
             if (table) table.style.display = "table";
+            document.querySelectorAll(".milestone-delete-btn").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                var platform = btn.getAttribute("data-platform");
+                var time = btn.getAttribute("data-time");
+                var songName = btn.getAttribute("data-song-name");
+                var count = btn.getAttribute("data-favorite-count");
+                if (!platform || time === null || songName === null || !count) return;
+                btn.disabled = true;
+                fetch("/api/milestone-delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ platform: platform, time: time, song_name: songName, favorite_count: parseInt(count, 10) })
+                })
+                  .then(function (r) { return r.json(); })
+                  .then(function (data) {
+                    if (data.ok) loadMilestoneLogs(false);
+                    else if (document.getElementById("milestone-outlier-msg")) document.getElementById("milestone-outlier-msg").textContent = data.error || "删除失败";
+                  })
+                  .catch(function () {
+                    if (document.getElementById("milestone-outlier-msg")) document.getElementById("milestone-outlier-msg").textContent = "请求失败";
+                  })
+                  .finally(function () { btn.disabled = false; });
+              });
+            });
           })
           .catch(function () {
             if (loading) loading.style.display = "none";
@@ -1241,6 +1277,36 @@
       }
       loadMilestoneLogs(true);
       setInterval(function () { loadMilestoneLogs(false); }, 60 * 1000);
+
+      (function () {
+        var btn = document.getElementById("milestone-remove-outliers-btn");
+        var platformEl = document.getElementById("milestone-outlier-platform");
+        var msgEl = document.getElementById("milestone-outlier-msg");
+        if (btn && platformEl) {
+          btn.addEventListener("click", function () {
+            if (msgEl) msgEl.textContent = "";
+            btn.disabled = true;
+            fetch("/api/milestone-remove-outliers", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ platform: platformEl.value, threshold: 100 })
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data.ok) {
+                  if (msgEl) msgEl.textContent = data.message || "已处理。";
+                  loadMilestoneLogs(false);
+                } else {
+                  if (msgEl) msgEl.textContent = data.error || "操作失败";
+                }
+              })
+              .catch(function () {
+                if (msgEl) msgEl.textContent = "请求失败";
+              })
+              .finally(function () { btn.disabled = false; });
+          });
+        }
+      })();
     })();
   </script>
   </div>

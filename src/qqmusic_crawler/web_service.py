@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -59,6 +60,62 @@ def normalize_platform(platform: str) -> str:
 
 def get_platform_meta(platform: str) -> Dict[str, str]:
     return PLATFORM_CONFIG[normalize_platform(platform)]
+
+
+def _resolve_changes_db_path(platform: str, base_dir: Optional[Path] = None) -> Path:
+    """解析变化库绝对路径：先试 base_dir（项目根），再试 cwd，返回第一个存在的路径。"""
+    meta = get_platform_meta(platform)
+    rel = meta["changes_db"]
+    for root in [(base_dir or Path(".")).resolve(), Path.cwd().resolve()]:
+        p = root / rel
+        if p.is_file():
+            return p
+    return (base_dir or Path(".")).resolve() / rel
+
+
+def _resolve_snapshots_dir(platform: str, base_dir: Optional[Path] = None) -> Path:
+    """解析快照目录绝对路径：先试 base_dir（项目根）下存在则用，再试 cwd，否则返回 base_dir 下路径。"""
+    meta = get_platform_meta(platform)
+    rel = meta["snapshots_dir"]
+    for root in [(base_dir or Path(".")).resolve(), Path.cwd().resolve()]:
+        p = root / rel
+        if p.is_dir():
+            return p
+    return (base_dir or Path(".")).resolve() / rel
+
+
+def _resolve_toplist_db_path(platform: str, base_dir: Optional[Path] = None) -> Path:
+    """解析榜单库绝对路径：先试 base_dir（项目根），再试 cwd，返回第一个存在的路径。"""
+    meta = get_platform_meta(platform)
+    rel = meta["toplist_db"]
+    for root in [(base_dir or Path(".")).resolve(), Path.cwd().resolve()]:
+        p = root / rel
+        if p.is_file():
+            return p
+    return (base_dir or Path(".")).resolve() / rel
+
+
+def resolve_data_paths_for_debug(base_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """返回各平台解析后的 data 路径，用于排查路径问题。"""
+    root = base_dir or Path(".")
+    out: Dict[str, Any] = {
+        "cwd": str(Path.cwd().resolve()),
+        "base_dir": str(root.resolve()),
+        "platforms": {},
+    }
+    for platform in SUPPORTED_PLATFORMS:
+        changes = _resolve_changes_db_path(platform, base_dir)
+        snapshots = _resolve_snapshots_dir(platform, base_dir)
+        toplist = _resolve_toplist_db_path(platform, base_dir)
+        out["platforms"][platform] = {
+            "changes_db": str(changes),
+            "changes_db_exists": changes.is_file(),
+            "snapshots_dir": str(snapshots),
+            "snapshots_dir_exists": snapshots.is_dir(),
+            "toplist_db": str(toplist),
+            "toplist_db_exists": toplist.is_file(),
+        }
+    return out
 
 
 def _snapshot_date_key(path: Path) -> str:
@@ -420,11 +477,19 @@ def get_report(
     value: str,
     artist_mid: str = "",
     song_display_limit: int = 15,
+    base_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     mode_clean = (mode or "").strip()
     value_clean = (value or "").strip()
     if mode_clean not in ("year", "month", "day"):
         return {"ok": False, "error": "报告粒度必须是 year/month/day。"}
+    if not value_clean:
+        if mode_clean == "year":
+            value_clean = str(datetime.now().year)
+        elif mode_clean == "month":
+            value_clean = datetime.now().strftime("%Y-%m")
+        elif mode_clean == "day":
+            value_clean = datetime.now().strftime("%Y-%m-%d")
     if not value_clean:
         return {"ok": False, "error": "请输入报告日期。"}
 
@@ -451,9 +516,9 @@ def get_report(
             return {"ok": False, "error": "日期输入不合法。"}
         label = "日期"
 
-    meta = get_platform_meta(platform)
+    changes_db_path = _resolve_changes_db_path(platform, base_dir)
     report = report_changes(
-        changes_db_file=Path(meta["changes_db"]),
+        changes_db_file=changes_db_path,
         date_str=date_str,
         month_str=month_str,
         year_str=year_str,
@@ -682,11 +747,106 @@ def get_milestone_logs(base_dir: Optional[Path] = None, limit: int = 500) -> Dic
     return {"ok": True, "entries": entries[:limit]}
 
 
+def delete_milestone_entry(
+    platform: str,
+    time_str: str,
+    song_name: str,
+    favorite_count: int,
+    base_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    从指定平台的里程碑 log 中删除一条记录（完全匹配：时间 + 歌曲名 + 收藏量）。
+    日志行格式：YYYY-MM-DD HH:MM:SS 歌曲名 收藏量
+    """
+    root = (base_dir or Path(".")).resolve()
+    meta = get_platform_meta(platform)
+    log_path = root / Path(meta["changes_db"]).parent / "milestone_{}.log".format(platform)
+    if not log_path.is_file():
+        return {"ok": False, "error": "未找到日志文件: {}".format(log_path)}
+
+    count_str = str(favorite_count)
+    removed = []
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        kept = []
+        for line in lines:
+            raw = line.rstrip("\n\r")
+            s = raw.strip()
+            if not s:
+                kept.append(line)
+                continue
+            parts = s.split()
+            if len(parts) < 3:
+                kept.append(line)
+                continue
+            line_time = "{} {}".format(parts[0], parts[1])
+            line_count = parts[-1]
+            line_song = " ".join(parts[2:-1]) if len(parts) > 3 else parts[2]
+            if line_time == time_str and line_count == count_str and line_song == song_name:
+                removed.append(raw)
+                continue
+            kept.append(line)
+        if not removed:
+            return {"ok": False, "error": "未找到匹配的记录"}
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+    except OSError as e:
+        return {"ok": False, "error": "读写日志失败: {}".format(e)}
+    return {"ok": True, "removed": len(removed), "message": "已删除 1 条里程碑记录"}
+
+
+def remove_milestone_outliers(
+    platform: str,
+    base_dir: Optional[Path] = None,
+    threshold: int = 100,
+) -> Dict[str, Any]:
+    """
+    剔除异常数据：对指定平台的变化表做「n-1 与 n+1 接近、n 异常」的修正，
+    并删除里程碑 log 中对应异常收藏量记录。
+    依赖 scripts/correct_kugou_metric_outliers.py 的 run()，三平台共用同一套表结构故均可调用。
+    """
+    root = (base_dir or Path(".")).resolve()
+    meta = get_platform_meta(platform)
+    changes_db = root / meta["changes_db"]
+    if not changes_db.is_file():
+        return {"ok": False, "error": "未找到变化库: {}".format(changes_db)}
+
+    import sys
+    scripts_dir = root / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from correct_kugou_metric_outliers import run as run_outlier_correction
+    except ImportError as e:
+        return {"ok": False, "error": "无法加载修正脚本: {}".format(e)}
+
+    result = run_outlier_correction(
+        changes_db=changes_db,
+        threshold=threshold,
+        method="neighbor",
+        dry_run=False,
+        fix_snapshot=False,
+    )
+    if result.get("error"):
+        return {"ok": False, "error": result["error"]}
+    return {
+        "ok": True,
+        "updated": result.get("updated", 0),
+        "removed_log_lines": result.get("removed_log_lines", 0),
+        "message": "已修正 {} 条变化表记录，并从里程碑 log 中删除 {} 条异常记录。".format(
+            result.get("updated", 0),
+            result.get("removed_log_lines", 0),
+        ),
+    }
+
+
 def get_report_chart_data(
     platform: str,
     mode: str,
     value: str,
     artist_mid: str = "",
+    base_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     获取变化折线图数据：年按月份聚合、月按日聚合、日按当天每次 run_at 聚合。
@@ -696,6 +856,13 @@ def get_report_chart_data(
     value_clean = (value or "").strip()
     if mode_clean not in ("year", "month", "day"):
         return {"ok": False, "error": "报告粒度必须是 year/month/day。"}
+    if not value_clean:
+        if mode_clean == "year":
+            value_clean = str(datetime.now().year)
+        elif mode_clean == "month":
+            value_clean = datetime.now().strftime("%Y-%m")
+        elif mode_clean == "day":
+            value_clean = datetime.now().strftime("%Y-%m-%d")
     if not value_clean:
         return {"ok": False, "error": "请输入报告日期。"}
 
@@ -718,8 +885,7 @@ def get_report_chart_data(
         except ValueError:
             return {"ok": False, "error": "日期输入不合法。"}
 
-    meta = get_platform_meta(platform)
-    db_path = Path(meta["changes_db"])
+    db_path = _resolve_changes_db_path(platform, base_dir)
     if not db_path.is_file():
         empty = {"labels": [], "datasets": []}
         return {"ok": True, "labels": [], "series": {"comment": [], "favorite": [], "fans": []}, "song_comment": empty, "song_favorite": empty, "song_fans": empty}
@@ -926,6 +1092,35 @@ def _ensure_songs_mixsongid(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
+def _songs_has_column(conn: sqlite3.Connection, column: str) -> bool:
+    """songs 表是否包含指定列。"""
+    cur = conn.execute("PRAGMA table_info(songs)")
+    return column in {row[1] for row in cur.fetchall()}
+
+
+def _mixsongid_from_row(
+    row: Tuple[object, ...],
+    mixsongid_index: int,
+    raw_json_index: Optional[int] = None,
+) -> Optional[int]:
+    """从查询行取 mixsongid：先读列值，为空则从 raw_json 解析（酷狗旧快照无该列时数据在 raw_json 里）。"""
+    if mixsongid_index < len(row) and row[mixsongid_index] is not None:
+        try:
+            return int(row[mixsongid_index])
+        except (TypeError, ValueError):
+            pass
+    if raw_json_index is not None and raw_json_index < len(row) and row[raw_json_index]:
+        try:
+            raw = json.loads(row[raw_json_index])
+            if isinstance(raw, dict):
+                v = raw.get("mixsongid") or raw.get("album_audio_id") or raw.get("audio_id")
+                if v is not None:
+                    return int(v)
+        except (TypeError, ValueError, KeyError):
+            pass
+    return None
+
+
 def search_songs(
     platform: str,
     keyword: str,
@@ -941,8 +1136,7 @@ def search_songs(
     if not keyword:
         return {"ok": False, "error": "请输入搜索关键词。"}
     meta = get_platform_meta(platform)
-    root = base_dir or Path(".")
-    snapshots_dir = root / meta["snapshots_dir"]
+    snapshots_dir = _resolve_snapshots_dir(platform, base_dir)
     prefix = meta["snapshot_prefix"]
     pattern = "{}_*.db".format(prefix)
     if not snapshots_dir.is_dir():
@@ -956,10 +1150,15 @@ def search_songs(
     conn = sqlite3.connect(str(latest))
     try:
         _ensure_songs_mixsongid(conn)
+        has_raw_json = _songs_has_column(conn, "raw_json")
+        if has_raw_json:
+            sel = "SELECT song_mid, name, album_name, comment_count, favorite_count_text, mixsongid, raw_json FROM songs"
+            mixsongid_idx, raw_json_idx = 5, 6
+        else:
+            sel = "SELECT song_mid, name, album_name, comment_count, favorite_count_text, mixsongid FROM songs"
+            mixsongid_idx, raw_json_idx = 5, None
         cur = conn.execute(
-            """
-            SELECT song_mid, name, album_name, comment_count, favorite_count_text, mixsongid
-            FROM songs
+            sel + """
             WHERE (name LIKE ? OR (album_name IS NOT NULL AND album_name LIKE ?))
             ORDER BY COALESCE(favorite_count_text, 0) DESC, song_mid ASC
             LIMIT ?
@@ -980,14 +1179,19 @@ def search_songs(
                 "album_name": (r[2] or "").strip() or "-",
                 "comment_count": int(r[3]) if r[3] is not None else 0,
                 "favorite_count": int(r[4]) if r[4] is not None else 0,
-                "mixsongid": int(r[5]) if len(r) > 5 and r[5] is not None else None,
+                "mixsongid": _mixsongid_from_row(r, mixsongid_idx, raw_json_idx),
             }
             for r in rows
         ],
     }
 
 
-def check_artist_toplist(platform: str, artist_name: str, top_n: int = 300) -> Dict[str, Any]:
+def check_artist_toplist(
+    platform: str,
+    artist_name: str,
+    top_n: int = 300,
+    base_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
     top_n_safe = top_n if top_n and top_n > 0 else 300
     meta = get_platform_meta(platform)
     client = build_client(platform)
@@ -999,7 +1203,7 @@ def check_artist_toplist(platform: str, artist_name: str, top_n: int = 300) -> D
         artist_mid, resolved_name = resolved
 
         hits = service.find_artist_toplist_hits(artist_mid=artist_mid, top_n=top_n_safe)
-        db_file = Path(meta["toplist_db"])
+        db_file = _resolve_toplist_db_path(platform, base_dir)
         upserted = upsert_artist_toplist_hits(
             db_file=db_file,
             artist_mid=artist_mid,
@@ -1020,7 +1224,12 @@ def check_artist_toplist(platform: str, artist_name: str, top_n: int = 300) -> D
         client.close()
 
 
-def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str, Any]:
+def get_top_songs(
+    platform: str,
+    artist_name: str,
+    top_n: int = 15,
+    base_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
     top_n_safe = top_n if top_n and top_n > 0 else 15
     meta = get_platform_meta(platform)
     client = build_client(platform)
@@ -1033,7 +1242,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
     finally:
         client.close()
 
-    snapshots_dir = Path(meta["snapshots_dir"])
+    snapshots_dir = _resolve_snapshots_dir(platform, base_dir)
     candidates = sorted(
         snapshots_dir.glob("{}_{}_*.db".format(meta["snapshot_prefix"], artist_mid))
     )
@@ -1044,25 +1253,22 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
     conn = sqlite3.connect(str(latest))
     try:
         _ensure_songs_mixsongid(conn)
+        has_raw_json = _songs_has_column(conn, "raw_json")
+        if has_raw_json:
+            fav_sel = "SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid, raw_json FROM songs"
+            com_sel = "SELECT song_mid, name, COALESCE(comment_count, 0) AS comment_count, mixsongid, raw_json FROM songs"
+            raw_idx = 4
+        else:
+            fav_sel = "SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid FROM songs"
+            com_sel = "SELECT song_mid, name, COALESCE(comment_count, 0) AS comment_count, mixsongid FROM songs"
+            raw_idx = None
         cur = conn.cursor()
         fav_rows = cur.execute(
-            """
-            SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid
-            FROM songs
-            WHERE artist_mid = ?
-            ORDER BY favorite_count_text DESC, song_mid ASC
-            LIMIT ?
-            """,
+            fav_sel + " WHERE artist_mid = ? ORDER BY favorite_count_text DESC, song_mid ASC LIMIT ?",
             (artist_mid, top_n_safe),
         ).fetchall()
         comment_rows = cur.execute(
-            """
-            SELECT song_mid, name, COALESCE(comment_count, 0) AS comment_count, mixsongid
-            FROM songs
-            WHERE artist_mid = ?
-            ORDER BY comment_count DESC, song_mid ASC
-            LIMIT ?
-            """,
+            com_sel + " WHERE artist_mid = ? ORDER BY comment_count DESC, song_mid ASC LIMIT ?",
             (artist_mid, top_n_safe),
         ).fetchall()
     finally:
@@ -1079,7 +1285,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
                 "song_mid": r[0],
                 "song_name": r[1] or r[0],
                 "value": int(r[2] or 0),
-                "mixsongid": int(r[3]) if len(r) > 3 and r[3] is not None else None,
+                "mixsongid": _mixsongid_from_row(r, 3, raw_idx),
             }
             for i, r in enumerate(fav_rows)
         ],
@@ -1089,7 +1295,7 @@ def get_top_songs(platform: str, artist_name: str, top_n: int = 15) -> Dict[str,
                 "song_mid": r[0],
                 "song_name": r[1] or r[0],
                 "value": int(r[2] or 0),
-                "mixsongid": int(r[3]) if len(r) > 3 and r[3] is not None else None,
+                "mixsongid": _mixsongid_from_row(r, 3, raw_idx),
             }
             for i, r in enumerate(comment_rows)
         ],

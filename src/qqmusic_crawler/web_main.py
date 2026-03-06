@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -14,6 +15,7 @@ from .web_service import (
     SUPPORTED_PLATFORMS,
     check_artist_toplist,
     crawl_track,
+    delete_milestone_entry,
     find_artists,
     get_milestone_logs,
     get_platform_meta,
@@ -21,12 +23,33 @@ from .web_service import (
     get_report_chart_data,
     get_top_songs,
     normalize_platform,
+    remove_milestone_outliers,
     search_songs,
+    resolve_data_paths_for_debug,
 )
 
 app = FastAPI(title="Music Crawler Web")
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+def _detect_project_root() -> Path:
+    """检测项目根目录：环境变量 QQMC_DATA_DIR > 代码目录（含 data+src）> cwd 下含 data 的目录。"""
+    env_data = os.environ.get("QQMC_DATA_DIR")
+    if env_data:
+        p = Path(env_data).resolve()
+        if (p / "data").is_dir() or p.name == "data":
+            return p if p.name != "data" else p.parent
+        if p.is_dir():
+            return p
+    code_root = Path(__file__).resolve().parents[2]
+    if (code_root / "data").is_dir() and (code_root / "src").is_dir():
+        return code_root
+    cwd = Path.cwd().resolve()
+    if (cwd / "data").is_dir():
+        return cwd
+    return code_root
+
+
+PROJECT_ROOT = _detect_project_root()
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "templates"))
 CRAWL_JOBS: Dict[str, Dict[str, Any]] = {}
 CRAWL_JOBS_LOCK = threading.Lock()
@@ -178,6 +201,7 @@ async def run_action(action: str, request: Request) -> HTMLResponse:
                 value=value,
                 artist_mid=artist_mid,
                 song_display_limit=15,
+                base_dir=PROJECT_ROOT,
             )
             context["result_type"] = "report-changes"
             context["result"] = data
@@ -196,6 +220,7 @@ async def run_action(action: str, request: Request) -> HTMLResponse:
                 platform=platform,
                 artist_name=artist_name,
                 top_n=top_n,
+                base_dir=PROJECT_ROOT,
             )
             context["result_type"] = "check-toplist"
             context["result"] = data
@@ -214,6 +239,7 @@ async def run_action(action: str, request: Request) -> HTMLResponse:
                 platform=platform,
                 artist_name=artist_name,
                 top_n=top_n,
+                base_dir=PROJECT_ROOT,
             )
             context["result_type"] = "top-songs"
             context["result"] = data
@@ -274,6 +300,57 @@ async def api_milestone_logs(limit: int = 500) -> JSONResponse:
     return JSONResponse(data)
 
 
+@app.get("/api/debug-paths")
+async def api_debug_paths() -> JSONResponse:
+    """返回当前解析出的 data 路径，便于排查「找不到数据」问题。"""
+    data = resolve_data_paths_for_debug(PROJECT_ROOT)
+    data["project_root"] = str(PROJECT_ROOT)
+    return JSONResponse(data)
+
+
+@app.post("/api/milestone-remove-outliers")
+async def api_milestone_remove_outliers(request: Request) -> JSONResponse:
+    """剔除异常数据：修正变化表并删除里程碑 log 中对应异常记录。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    platform = normalize_platform(str(body.get("platform") or "kugou"))
+    threshold = int(body.get("threshold") or 100)
+    data = remove_milestone_outliers(
+        platform=platform,
+        base_dir=PROJECT_ROOT,
+        threshold=threshold,
+    )
+    return JSONResponse(data)
+
+
+@app.post("/api/milestone-delete")
+async def api_milestone_delete(request: Request) -> JSONResponse:
+    """删除单条里程碑记录（按平台、时间、歌曲名、收藏量精确匹配）。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    platform = normalize_platform(str(body.get("platform") or ""))
+    if not platform:
+        return JSONResponse({"ok": False, "error": "缺少 platform"})
+    time_str = str(body.get("time") or "").strip()
+    song_name = str(body.get("song_name") or "").strip()
+    try:
+        favorite_count = int(body.get("favorite_count"))
+    except (TypeError, ValueError):
+        return JSONResponse({"ok": False, "error": "缺少或无效的 favorite_count"})
+    data = delete_milestone_entry(
+        platform=platform,
+        time_str=time_str,
+        song_name=song_name,
+        favorite_count=favorite_count,
+        base_dir=PROJECT_ROOT,
+    )
+    return JSONResponse(data)
+
+
 @app.get("/api/report-chart")
 async def api_report_chart(
     platform: str = "qq",
@@ -288,6 +365,7 @@ async def api_report_chart(
         mode=report_mode or "year",
         value=report_value,
         artist_mid=(report_artist_mid or "").strip(),
+        base_dir=PROJECT_ROOT,
     )
     return JSONResponse(data)
 
