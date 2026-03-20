@@ -1,0 +1,12 @@
+{
+  "mid": "003SqJTl4fnhRC",
+  "achievements": [
+    {"date": "2025/11/18", "chart_name": "飙升榜", "current_rank": 75, "history_periods": 16, "peak_rank": 3},
+    {"date": "2025/08/25", "chart_name": "听歌识曲榜", "current_rank": 58, "history_periods": 18, "peak_rank": 31},
+    {"date": "2025/01/23", "chart_name": "影视金曲榜", "current_rank": 14, "history_periods": 18, "peak_rank": 5},
+    {"date": "2024/12/30", "chart_name": "腾讯音乐由你榜", "current_rank": 97, "history_periods": 9, "peak_rank": 30},
+    {"date": "2024/12/13", "chart_name": "流行指数榜", "current_rank": 67, "history_periods": 15, "peak_rank": 48},
+    {"date": "2024/11/28", "chart_name": "内地榜", "current_rank": 71, "history_periods": 3, "peak_rank": 43},
+    {"date": "2024/11/23", "chart_name": "热歌榜", "current_rank": 169, "history_periods": 22, "peak_rank": 152}
+  ]
+}

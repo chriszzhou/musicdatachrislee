@@ -1,0 +1,30 @@
+{
+"runs": [
+{
+"run_at": "2026-03-06 15:05",
+"results": [
+{
+"platform": "qq",
+"platform_name": "QQ音乐",
+"ok": true,
+"hits_count": 2,
+"error": null
+},
+{
+"platform": "netease",
+"platform_name": "网易云音乐",
+"ok": true,
+"hits_count": 1,
+"error": null
+},
+{
+"platform": "kugou",
+"platform_name": "酷狗音乐",
+"ok": true,
+"hits_count": 0,
+"error": null
+}
+]
+}
+]
+}

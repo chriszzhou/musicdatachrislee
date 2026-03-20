@@ -1,0 +1,278 @@
+{
+  "info": {
+    "company": {
+      "title": "唱片公司",
+      "type": "JUMP_TO_COMPANY",
+      "content": [
+        {
+          "id": 777273,
+          "value": "上海韶愔音乐娱乐有限公司",
+          "mid": "",
+          "type": 0,
+          "show_type": 0,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 51,
+      "more": 0,
+      "selected": "company",
+      "use_platform": 1
+    },
+    "intro": {
+      "title": "简介",
+      "type": "SPECIAL_DISPLAY",
+      "content": [
+        {
+          "id": 0,
+          "value": "影视剧《大梦归离》主题曲《大梦归离》由音乐人刘兆伦作曲并担任制作人，特邀歌手李宇春倾情演唱。\n作为《大梦归离》的同名主题曲，整首歌的内容以该剧的核心视角阐述，在四季的变化里挣扎、寻找、奔赴。歌曲以古琴、琵琶作为节奏的打底，如月光般缓缓流淌，加之吉他、贝斯的婉转变换，让旋律有了独特的律动。李宇春潺潺婉转，细腻深情的声音情绪，顺着字句纹理，编织在朦胧闪烁的流绪里，唱一丝牵挂，换一次相遇。与记忆触碰，让心境沉寂，让回忆蔓延，在潮汐下思念，在梦境中追寻。",
+          "mid": "",
+          "type": 0,
+          "show_type": 0,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 52,
+      "more": 0,
+      "selected": "intro",
+      "use_platform": 3
+    },
+    "lan": {
+      "title": "歌曲语种",
+      "type": "JUMP_TO_CATEGORY",
+      "content": [
+        {
+          "id": 1,
+          "value": "国语",
+          "mid": "",
+          "type": 0,
+          "show_type": 2,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "http://y.qq.com/m/client/categoryzone/detail.html?categoryId=1&showType=2&isParent=0&_hidehd=1&groupId=100",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 11,
+      "more": 0,
+      "selected": "lan",
+      "use_platform": 3
+    },
+    "pub_time": {
+      "title": "发行时间",
+      "type": "desc",
+      "content": [
+        {
+          "id": 0,
+          "value": "2024-10-31",
+          "mid": "",
+          "type": 0,
+          "show_type": 0,
+          "is_parent": 0,
+          "picurl": "",
+          "read_cnt": 0,
+          "author": "",
+          "jumpurl": "",
+          "ori_picurl": ""
+        }
+      ],
+      "pos": 50,
+      "more": 0,
+      "selected": "pub_time",
+      "use_platform": 0
+    }
+  },
+  "extras": {
+    "name": "大梦归离",
+    "transname": "",
+    "subtitle": "《大梦归离》影视剧主题曲",
+    "from": "0",
+    "wikiurl": ""
+  },
+  "track_info": {
+    "id": 517385504,
+    "type": 0,
+    "mid": "003SqJTl4fnhRC",
+    "name": "大梦归离",
+    "title": "大梦归离",
+    "subtitle": "《大梦归离》影视剧主题曲",
+    "singer": [
+      {
+        "id": 4615,
+        "mid": "002ZOuVm3Qn20Y",
+        "name": "李宇春",
+        "title": "李宇春",
+        "type": 1,
+        "uin": 0
+      }
+    ],
+    "album": {
+      "id": 57721256,
+      "mid": "003up2WR1OtPci",
+      "name": "大梦归离 影视原声带",
+      "title": "大梦归离 影视原声带",
+      "subtitle": "《大梦归离》影视剧主题曲",
+      "time_public": "2024-10-31",
+      "pmid": "003up2WR1OtPci_1"
+    },
+    "mv": {
+      "id": 2177232,
+      "vid": "003JLFsS38IHjQ",
+      "name": "",
+      "title": "",
+      "vt": 0
+    },
+    "interval": 281,
+    "isonly": 0,
+    "language": 0,
+    "genre": 0,
+    "index_cd": 0,
+    "index_album": 2,
+    "time_public": "2024-10-31",
+    "status": 0,
+    "fnote": 4009,
+    "file": {
+      "media_mid": "003SqJTl4fnhRC",
+      "size_24aac": 0,
+      "size_48aac": 1711398,
+      "size_96aac": 3421588,
+      "size_192ogg": 6681641,
+      "size_192aac": 6805518,
+      "size_128mp3": 4498692,
+      "size_320mp3": 11246434,
+      "size_ape": 0,
+      "size_flac": 61217807,
+      "size_dts": 0,
+      "size_try": 960887,
+      "try_begin": 82253,
+      "try_end": 150158,
+      "url": "",
+      "size_hires": 0,
+      "hires_sample": 0,
+      "hires_bitdepth": 0,
+      "b_30s": 0,
+      "e_30s": 60000,
+      "size_96ogg": 3324041,
+      "size_360ra": [],
+      "size_dolby": 0,
+      "size_new": [
+        190204464,
+        31064715,
+        79168156,
+        11417507,
+        0,
+        22547924,
+        36775971,
+        2670804,
+        31019429,
+        7920648
+      ]
+    },
+    "pay": {
+      "pay_month": 1,
+      "price_track": 200,
+      "price_album": 0,
+      "pay_play": 1,
+      "pay_down": 1,
+      "pay_status": 0,
+      "time_free": 0
+    },
+    "action": {
+      "switch": 16897793,
+      "msgid": 13,
+      "alert": 2,
+      "icons": 12992510,
+      "msgshare": 0,
+      "msgfav": 0,
+      "msgdown": 0,
+      "msgpay": 6,
+      "switch2": 0,
+      "icon2": 0
+    },
+    "ksong": {
+      "id": 152105746,
+      "mid": "001IW2gV02YNxc"
+    },
+    "volume": {
+      "gain": -8.943,
+      "peak": 1,
+      "lra": 12.421
+    },
+    "label": "0",
+    "url": "",
+    "bpm": 0,
+    "version": 0,
+    "trace": "",
+    "data_type": 0,
+    "modify_stamp": 0,
+    "pingpong": "",
+    "ppurl": "",
+    "tid": 0,
+    "ov": 0,
+    "sa": 19456,
+    "es": "",
+    "vs": [
+      "064SDmFT2xGfTR",
+      "",
+      "",
+      "002cwhYV340Zab",
+      "0046lhon0i6OJK",
+      "",
+      "",
+      "",
+      "",
+      "002M5Nyd4UnVLP",
+      "",
+      "",
+      "",
+      "003AZPeS4Obswr",
+      "001mvoep3io9NH",
+      "003i9dw920hVm6",
+      "000vvg4L3QaUnu",
+      "004ORezf42T5SD",
+      "00317IKe0c62rJ",
+      "003vvBDt284I4f",
+      "0047VPxY4PUUmj",
+      "0015A3R00Zlp72",
+      "",
+      "0004jkIz2i9934",
+      "003Ww7nx3rbKkk",
+      "",
+      "002etW8w0cGfwl",
+      "00207EdO2IHeic",
+      "004BpTAk3iCVTY",
+      "00207rE44MEPtr",
+      "004dPcrc0PVJa6",
+      ""
+    ],
+    "vi": [
+      777273,
+      222,
+      222,
+      12805116,
+      82253,
+      112253,
+      1
+    ],
+    "ktag": "0",
+    "vf": [
+      -8.51519,
+      0.999969,
+      12.5313,
+      0,
+      0,
+      0
+    ]
+  }
+}

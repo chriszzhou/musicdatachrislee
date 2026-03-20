@@ -3,5 +3,4 @@
 *.egg-info/
 __pycache__/
 *.pyc
-data/
 logs/*.log
