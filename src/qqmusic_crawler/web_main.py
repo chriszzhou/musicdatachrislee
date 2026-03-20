@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import schedulers as _sched
@@ -67,6 +68,7 @@ def _detect_project_root() -> Path:
 
 PROJECT_ROOT = _detect_project_root()
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "templates"))
+app.mount("/scripts", StaticFiles(directory=str(PROJECT_ROOT / "scripts"), check_dir=False), name="scripts")
 
 # 与定时任务、新歌 API 共用北京时间（定义见 schedulers）
 BEIJING_TZ = _sched.BEIJING_TZ
@@ -315,6 +317,25 @@ async def api_new_song_last_update() -> JSONResponse:
     return JSONResponse({"ok": True, "last_update_at": at or "", "date_today": date_today})
 
 
+@app.get("/api/home-metrics")
+async def api_home_metrics() -> JSONResponse:
+    """首页三平台概览数据（供前端按任务完成后刷新）。"""
+    data = await _run_in_thread(
+        get_artist_snapshot_metrics_all_platforms,
+        artist_name=settings.effective_default_topsongs_artist,
+        base_dir=PROJECT_ROOT,
+    )
+    return JSONResponse(data)
+
+
+@app.get("/api/crawl-track/status")
+async def api_crawl_track_status() -> JSONResponse:
+    """返回 crawl_track 最近一轮完成时间（写库/写日志完成后更新）。"""
+    with _sched.CRAWL_TRACK_LAST_FINISHED_LOCK:
+        at = _sched.CRAWL_TRACK_LAST_FINISHED_AT
+    return JSONResponse({"ok": True, "last_finished_at": at or ""})
+
+
 @app.get("/api/top-songs")
 async def api_top_songs(
     platform: str,
@@ -331,6 +352,20 @@ async def api_top_songs(
         offset,
         limit,
         PROJECT_ROOT,
+    )
+    return JSONResponse(data)
+
+
+@app.get("/api/search-songs")
+async def api_search_songs(song_keyword: str = "", limit: int = 5) -> JSONResponse:
+    """首页歌曲搜索：三平台最新快照异步查询（不切页）。"""
+    keyword = (song_keyword or "").strip()
+    limit_safe = min(max(1, int(limit)), 50)
+    data = await _run_in_thread(
+        search_songs_all_platforms,
+        keyword=keyword,
+        base_dir=PROJECT_ROOT,
+        limit=limit_safe,
     )
     return JSONResponse(data)
 

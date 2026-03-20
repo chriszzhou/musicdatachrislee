@@ -38,6 +38,10 @@ CRAWL_TRACK_INTERVAL_MINUTES = settings.qqmc_crawl_track_interval_minutes
 NEW_SONG_LAST_UPDATE_AT: Optional[str] = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 NEW_SONG_LAST_UPDATE_LOCK = threading.Lock()
 
+# crawl_track 一轮（三平台抓取 + 异常修正）完成时间（供首页按“任务完成”刷新）
+CRAWL_TRACK_LAST_FINISHED_AT: Optional[str] = None
+CRAWL_TRACK_LAST_FINISHED_LOCK = threading.Lock()
+
 _project_root: Optional[Path] = None
 _crawl_track_last_cleanup_date: Optional[date_type] = None
 
@@ -104,7 +108,7 @@ def _new_song_scheduler_loop() -> None:
 
 
 def _run_crawl_track_round() -> None:
-    global _crawl_track_last_cleanup_date
+    global _crawl_track_last_cleanup_date, CRAWL_TRACK_LAST_FINISHED_AT
     root = _root()
     today = date_type.today()
     if _crawl_track_last_cleanup_date != today:
@@ -155,6 +159,10 @@ def _run_crawl_track_round() -> None:
             logger.warning("酷狗异常修正未执行: {}", oc.get("error", ""))
     except Exception as e:
         logger.warning("酷狗异常修正异常: {}", e, exc_info=True)
+
+    # 标记本轮结束（已完成三平台抓取及后处理）
+    with CRAWL_TRACK_LAST_FINISHED_LOCK:
+        CRAWL_TRACK_LAST_FINISHED_AT = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _crawl_track_scheduler_loop() -> None:

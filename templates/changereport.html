@@ -7,6 +7,24 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     :root {
+      --bg: #0f141d;
+      --card: #171f2b;
+      --border: #2a3547;
+      --text: #d7e1f0;
+      --muted: #93a4ba;
+      --primary: #5f8fd6;
+      --primary-deep: #4f7fc8;
+      --success-bg: #10261d;
+      --success-text: #63d9aa;
+      --error-bg: #341c22;
+      --error-text: #ffa2b1;
+      --table-head-bg: #202a3a;
+      --table-row-even: #141c27;
+      --card-soft: #121a26;
+      --shadow-soft: 0 10px 24px rgba(6, 10, 20, 0.32);
+      --chart-grid: rgba(154, 172, 191, 0.2);
+    }
+    body[data-theme="light"] {
       --bg: #f4f7ff;
       --card: #ffffff;
       --border: #e3e8f5;
@@ -18,6 +36,11 @@
       --success-text: #047857;
       --error-bg: #fef2f2;
       --error-text: #b91c1c;
+      --table-head-bg: #f3f7ff;
+      --table-row-even: #fafcff;
+      --card-soft: #fbfdff;
+      --shadow-soft: 0 8px 24px rgba(30, 70, 140, 0.08);
+      --chart-grid: rgba(148, 163, 184, 0.28);
     }
 
     * { box-sizing: border-box; }
@@ -25,35 +48,96 @@
       margin: 0;
       font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      background: radial-gradient(circle at top left, #232f42 0%, var(--bg) 34%, var(--bg) 100%);
       line-height: 1.55;
     }
-    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
+    body[data-theme="light"] {
+      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+    }
+    .page {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 14px 18px 24px;
+    }
+    @media (min-width: 1700px) {
+      .page { padding: 16px 28px 28px; }
+    }
     .header-card {
-      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px 20px;
-      box-shadow: 0 8px 24px rgba(30, 70, 140, 0.08);
-      margin-bottom: 14px;
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 12px;
+    }
+    .header-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(150, 182, 230, 0.18) 0%, rgba(11, 20, 34, 0.04) 100%);
+      pointer-events: none;
+    }
+    .header-card::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      bottom: 8px;
+      width: min(560px, 48vw);
+      background: url("/scripts/first.jpg") right center / contain no-repeat;
+      opacity: 0.62;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .header-card > * {
+      position: relative;
+      z-index: 2;
+    }
+    body[data-theme="light"] .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+    }
+    body[data-theme="light"] .header-card::before {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(233, 241, 255, 0.08) 100%);
+    }
+    body[data-theme="light"] .header-card::after {
+      opacity: 0.69;
     }
     .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
     .subtitle { color: var(--muted); font-size: 14px; }
+    .header-actions { margin-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .nav-links a { color: var(--primary); text-decoration: none; }
     .nav-links a:hover { text-decoration: underline; }
+    button.theme-toggle {
+      min-height: 30px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      box-shadow: none;
+      border: 1px solid var(--border);
+      background: #1f2c3f;
+      color: #d7e4fa;
+      cursor: pointer;
+    }
+    body[data-theme="light"] button.theme-toggle {
+      background: #fff;
+      color: #334155;
+    }
     .block {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 14px 14px 12px;
       margin-top: 12px;
-      box-shadow: 0 6px 18px rgba(30, 70, 140, 0.06);
+      box-shadow: var(--shadow-soft);
     }
     .block h3 {
       margin: 0 0 10px;
       font-size: 17px;
       font-weight: 650;
-      color: #20335f;
+      color: var(--text);
     }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     input, select, button {
@@ -61,7 +145,7 @@
       padding: 7px 10px;
       border-radius: 10px;
       border: 1px solid #d7deef;
-      background: #fff;
+      background: var(--card);
       font-size: 14px;
       transition: all 0.2s ease;
     }
@@ -69,6 +153,15 @@
       outline: none;
       border-color: #8fb3ff;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    body[data-theme="dark"] input,
+    body[data-theme="dark"] select {
+      background: #131c28;
+      border-color: #2d3a50;
+      color: #d7e1f0;
+    }
+    body[data-theme="dark"] input::placeholder {
+      color: #8fa2bc;
     }
     button {
       border: 0;
@@ -107,7 +200,7 @@
       border-radius: 12px;
       overflow: hidden;
       font-size: 14px;
-      background: #fff;
+      background: var(--card);
     }
     th, td {
       border-bottom: 1px solid #edf1fb;
@@ -116,13 +209,22 @@
       vertical-align: top;
     }
     th {
-      background: #f3f7ff;
-      color: #334b86;
+      background: var(--table-head-bg);
+      color: var(--text);
       font-weight: 650;
       white-space: nowrap;
     }
     tr:last-child td { border-bottom: none; }
-    tr:nth-child(even) td { background: #fafcff; }
+    tr:nth-child(even) td { background: var(--table-row-even); }
+    body[data-theme="dark"] table {
+      border-color: #2a3446;
+      background: #161e2a;
+    }
+    body[data-theme="dark"] th,
+    body[data-theme="dark"] td {
+      border-bottom-color: #273246;
+      color: #d2dceb;
+    }
     table td a {
       color: #2563eb;
       text-decoration: none;
@@ -140,12 +242,41 @@
       border: 1px solid #e4eaf8;
       border-radius: 12px;
       padding: 10px 10px 8px;
-      background: #fbfdff;
+      background: var(--card-soft);
+    }
+    .report-platform-block > .chart-card.chart-card-fixed {
+      min-height: 240px;
+      display: flex;
+      flex-direction: column;
+    }
+    .report-platform-block > .chart-card.chart-card-fixed .chart-title {
+      flex: 0 0 auto;
+    }
+    .report-platform-block > .chart-card.chart-card-fixed .chart-row,
+    .report-platform-block > .chart-card.chart-card-fixed > div:not(.chart-title):not(.chart-content-scroll) {
+      flex: 0 0 auto;
+    }
+    .report-platform-block > .chart-card.chart-card-fixed {
+      overflow: hidden;
+    }
+    .report-platform-block > .chart-card.chart-card-fixed .chart-row:last-child {
+      margin-bottom: 0;
+    }
+    .report-platform-block > .chart-card.chart-card-fixed .chart-content-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    @media (max-width: 1280px) {
+      .report-platform-block > .chart-card.chart-card-fixed {
+        min-height: 220px;
+      }
     }
     .chart-title {
       font-size: 14px;
       font-weight: 650;
-      color: #20335f;
+      color: var(--text);
       margin-bottom: 8px;
     }
     .milestone-grid {
@@ -162,8 +293,8 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       overflow: hidden;
-      background: #fff;
-      box-shadow: 0 4px 14px rgba(30, 70, 140, 0.06);
+      background: var(--card);
+      box-shadow: var(--shadow-soft);
       display: flex;
       flex-direction: column;
       min-width: 0;
@@ -176,13 +307,13 @@
       letter-spacing: 0.02em;
     }
     .milestone-card--qq .milestone-card-head {
-      background: linear-gradient(135deg, #22b35c 0%, #158c45 100%);
+      background: linear-gradient(135deg, #2f9960 0%, #25764d 100%);
     }
     .milestone-card--netease .milestone-card-head {
-      background: linear-gradient(135deg, #e85a5a 0%, #c03838 100%);
+      background: linear-gradient(135deg, #c65d66 0%, #a2474f 100%);
     }
     .milestone-card--kugou .milestone-card-head {
-      background: linear-gradient(135deg, #1ab0ff 0%, #0787d4 100%);
+      background: linear-gradient(135deg, #4297c9 0%, #3477a1 100%);
     }
     .milestone-card-body {
       flex: 1;
@@ -310,6 +441,25 @@
       min-width: 52px;
       text-align: right;
     }
+    body[data-theme="dark"] .chart-label {
+      color: #b8c7dc;
+    }
+    body[data-theme="dark"] .chart-track {
+      background: #202b3c;
+      border: 1px solid #2a374b;
+    }
+    body[data-theme="dark"] .chart-fill-fav {
+      background: linear-gradient(90deg, #7da4d4, #5e83bb);
+    }
+    body[data-theme="dark"] .chart-fill-comment {
+      background: linear-gradient(90deg, #72b79c, #53937b);
+    }
+    body[data-theme="dark"] .chart-fill-fans {
+      background: linear-gradient(90deg, #9c90c7, #7f74ad);
+    }
+    body[data-theme="dark"] .chart-value {
+      color: #aebfd7;
+    }
     .progress-wrap { display: none; margin-top: 10px; }
     .progress-text { font-size: 13px; color: var(--muted); margin-bottom: 5px; }
     .progress-bar { width: 100%; height: 8px; background: #e8eefc; border-radius: 999px; overflow: hidden; }
@@ -367,8 +517,47 @@
       background: #e0e8ff;
       transform: none;
     }
+    body[data-theme="dark"] button.block-toggle {
+      color: #c2d2ea;
+      background: #1a2536;
+      border-color: #2b3b54;
+    }
+    body[data-theme="dark"] button.block-toggle:hover {
+      background: #223148;
+      color: #d8e5f8;
+      border-color: #365073;
+    }
     .block-body--collapsible:not(.is-open) {
       display: none !important;
+    }
+    .report-platform-grid {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .report-platform-block {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+      border-top: none !important;
+      min-width: 0;
+    }
+    .report-chart-wrap-row {
+      grid-column: 1 / -1;
+      margin-top: 2px;
+    }
+    .report-chart-wrap-row .chart-card {
+      max-width: min(100%, 1320px);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .report-chart-wrap-row canvas {
+      display: block;
+      max-height: 340px;
+    }
+    @media (max-width: 1280px) {
+      .report-platform-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -378,7 +567,9 @@
   <div class="header-card">
     <h1 class="title">变化报告</h1>
     <div class="subtitle">三平台歌曲 / 粉丝指标变化（默认歌手 {{ default_topsongs_artist }}）</div>
-    <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+    <div class="header-actions">
+      <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+    </div>
   </div>
 
   {% if message %}
@@ -427,13 +618,15 @@
 
     <p class="subtitle" style="margin-top: 14px;">{{ report_value }} · {{ default_topsongs_artist }}</p>
 
+    <div class="report-platform-grid">
     {% for plat in platforms %}
       {% set result = reports_by_platform.get(plat, {}) %}
-      <div class="report-platform-block" style="margin-top: 12px; padding-top: 12px;{% if not loop.first %} border-top: 1px solid rgba(148,163,184,0.25);{% endif %}">
+      <div class="report-platform-block">
         <h4 class="subtitle" style="margin: 0 0 10px;">{{ platform_display_names.get(plat, plat) }}</h4>
         {% if result.get("ok") %}
-      <div class="chart-card">
+      <div class="chart-card chart-card-fixed">
         <div class="chart-title">评论增长</div>
+      <div class="chart-content-scroll">
       {% if result.get("comment_chart_rows") %}
       {% set comment_rows = result.get("comment_chart_rows", []) %}
       {% set comment_max_abs = (comment_rows | map(attribute='delta_abs') | max) %}
@@ -451,9 +644,11 @@
       <div>无</div>
       {% endif %}
       </div>
+      </div>
 
-      <div class="chart-card">
+      <div class="chart-card chart-card-fixed">
         <div class="chart-title">收藏增长</div>
+      <div class="chart-content-scroll">
       {% if result.get("favorite_chart_rows") %}
       {% set favorite_rows = result.get("favorite_chart_rows", []) %}
       {% set favorite_max_abs = (favorite_rows | map(attribute='delta_abs') | max) %}
@@ -470,6 +665,7 @@
       {% else %}
       <div>无</div>
       {% endif %}
+      </div>
       </div>
 
       <div class="chart-card">
@@ -501,38 +697,67 @@
           onclick="typeof window.showReportChart === 'function' && window.showReportChart(this);"
         >变化折线图</button>
       </div>
-      <div id="report-chart-wrap-{{ plat }}" style="display:none; margin-top: 14px;">
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">变化趋势（评论 / 收藏 / 粉丝 增量）</div>
-          <div id="report-chart-no-data-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
-          <canvas id="report-chart-canvas-{{ plat }}" height="260"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">收藏折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-favorite-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-favorite-{{ plat }}" height="240"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">评论折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-comment-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-comment-{{ plat }}" height="240"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">粉丝折线图</div>
-          <div id="report-chart-no-data-fans-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-fans-{{ plat }}" height="240"></canvas>
-        </div>
-      </div>
         {% else %}
       <div class="err">{{ result.get("error", "加载失败") }}</div>
         {% endif %}
       </div>
     {% endfor %}
+
+    {% for plat in platforms %}
+      {% set result = reports_by_platform.get(plat, {}) %}
+      {% if result.get("ok") %}
+      <div id="report-chart-wrap-{{ plat }}" class="report-chart-wrap-row" style="display:none; margin-top: 14px;">
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">变化趋势（评论 / 收藏 / 粉丝 增量）</div>
+          <div id="report-chart-no-data-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
+          <canvas id="report-chart-canvas-{{ plat }}"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">收藏折线图（歌曲，Top10）</div>
+          <div id="report-chart-no-data-favorite-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-favorite-{{ plat }}"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">评论折线图（歌曲，Top10）</div>
+          <div id="report-chart-no-data-comment-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-comment-{{ plat }}"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">粉丝折线图</div>
+          <div id="report-chart-no-data-fans-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-fans-{{ plat }}"></canvas>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+    </div>
     </div>
   </div>
 
   <script>
     (function () {
+      function getTheme() {
+        return document.body.getAttribute("data-theme") || "dark";
+      }
+      function applyTheme(theme) {
+        var t = theme === "light" ? "light" : "dark";
+        document.body.setAttribute("data-theme", t);
+        var btn = document.getElementById("theme-toggle");
+        if (btn) btn.textContent = t === "dark" ? "切换为浅色" : "切换为深色";
+        try { localStorage.setItem("qqmc_theme", t); } catch (e) {}
+      }
+      function initThemeToggle() {
+        var saved = "";
+        try { saved = localStorage.getItem("qqmc_theme") || ""; } catch (e) {}
+        applyTheme(saved === "light" ? "light" : "dark");
+        var btn = document.getElementById("theme-toggle");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          applyTheme(getTheme() === "dark" ? "light" : "dark");
+        });
+      }
+      initThemeToggle();
+
       function bindBlockToggles() {
         document.querySelectorAll(".block-toggle").forEach(function (btn) {
           if (btn.dataset.bound) return;
@@ -579,19 +804,35 @@
         "rgba(96, 165, 250, 1)", "rgba(52, 211, 153, 1)", "rgba(167, 139, 250, 1)", "rgba(248, 113, 113, 1)", "rgba(251, 191, 36, 1)",
         "rgba(34, 211, 238, 1)", "rgba(244, 114, 182, 1)", "rgba(129, 140, 248, 1)", "rgba(45, 212, 191, 1)", "rgba(134, 239, 172, 1)"
       ];
+      function getReportChartTheme() {
+        var dark = getTheme() === "dark";
+        return {
+          legend: dark ? "#b8c7dc" : "#475569",
+          axis: dark ? "#9fb2cb" : "#64748b",
+          axisBold: dark ? "#d9e3f2" : "#334155",
+          grid: dark ? "rgba(148, 163, 184, 0.16)" : "rgba(148, 163, 184, 0.24)",
+          tooltipBg: dark ? "rgba(20, 28, 39, 0.94)" : "rgba(31, 42, 68, 0.92)",
+          pointBg: dark ? "#0f172a" : "#ffffff",
+          mutedLine: dark ? "rgba(148, 163, 184, 0.24)" : "rgba(148, 163, 184, 0.30)",
+          hiLabel: dark ? "#e5edf9" : "#1e293b",
+          areaTopAlpha: dark ? 0.26 : 0.22,
+          areaMidAlpha: dark ? 0.08 : 0.07
+        };
+      }
       function chartGradient(r, g, b) {
         return function (context) {
           var chart = context.chart;
           var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
+          var t = getReportChartTheme();
           if (hi != null && context.datasetIndex !== hi) {
-            return "rgba(148, 163, 184, 0.06)";
+            return "rgba(148, 163, 184, 0.05)";
           }
           var ctx = chart.ctx;
           var area = chart.chartArea;
           if (!area) return "transparent";
           var gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
-          gradient.addColorStop(0, "rgba(" + r + "," + g + "," + b + ",0.4)");
-          gradient.addColorStop(0.5, "rgba(" + r + "," + g + "," + b + ",0.12)");
+          gradient.addColorStop(0, "rgba(" + r + "," + g + "," + b + "," + t.areaTopAlpha + ")");
+          gradient.addColorStop(0.48, "rgba(" + r + "," + g + "," + b + "," + t.areaMidAlpha + ")");
           gradient.addColorStop(1, "rgba(" + r + "," + g + "," + b + ",0)");
           return gradient;
         };
@@ -600,8 +841,9 @@
         return function (context) {
           var chart = context.chart;
           var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
+          var t = getReportChartTheme();
           if (hi == null) return fullColor;
-          return context.datasetIndex === hi ? fullColor : "rgba(148, 163, 184, 0.28)";
+          return context.datasetIndex === hi ? fullColor : t.mutedLine;
         };
       }
       var highlightDataLabelsPlugin = {
@@ -615,7 +857,7 @@
           if (!meta.data || meta.data.length === 0) return;
           ctx.save();
           ctx.font = "bold 11px \"PingFang SC\", \"Microsoft YaHei\", sans-serif";
-          ctx.fillStyle = "#e2e8f0";
+          ctx.fillStyle = getReportChartTheme().hiLabel;
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
           for (var i = 0; i < meta.data.length; i++) {
@@ -653,6 +895,11 @@
           alert("页面元素未就绪，请刷新后重试。");
           return;
         }
+        document.querySelectorAll("[id^='report-chart-wrap-']").forEach(function (el) {
+          if (el && el.id !== ("report-chart-wrap-" + suf)) {
+            el.style.display = "none";
+          }
+        });
         wrap.style.display = "block";
         destroyReportCharts();
         var noDataEl = document.getElementById("report-chart-no-data-" + suf);
@@ -691,12 +938,40 @@
             var labels = data.labels || [];
             var isDay = reportMode === "day";
             var displayLabels = formatChartLabels(labels, reportMode);
+            var chartTheme = getReportChartTheme();
+            function calcAdaptiveCanvasHeight(pointCount, isMainChart) {
+              var vw = Math.max(980, window.innerWidth || 1280);
+              var compactScale = vw >= 1800 ? 0.86 : (vw >= 1440 ? 0.92 : 1);
+              var base = (isMainChart ? 258 : 218) * compactScale;
+              var grow = Math.min(72, Math.max(0, (pointCount - 8) * 4));
+              var minH = isMainChart ? 228 : 198;
+              var maxH = isMainChart ? 320 : 278;
+              return Math.max(minH, Math.min(maxH, Math.round(base + grow)));
+            }
+            function applyAdaptiveCanvasHeight(canvasEl, pointCount, isMainChart) {
+              if (!canvasEl) return;
+              var h = calcAdaptiveCanvasHeight(pointCount, isMainChart);
+              canvasEl.height = h;
+              canvasEl.style.height = h + "px";
+            }
+            applyAdaptiveCanvasHeight(canvas, displayLabels.length, true);
             var chartOpts = {
               responsive: true,
-              maintainAspectRatio: true,
+              maintainAspectRatio: false,
               animation: { duration: 800 },
               plugins: {
                 highlightIndex: null,
+                tooltip: {
+                  mode: "index",
+                  intersect: false,
+                  backgroundColor: chartTheme.tooltipBg,
+                  borderColor: chartTheme.grid,
+                  borderWidth: 1,
+                  titleColor: chartTheme.axisBold,
+                  bodyColor: chartTheme.legend,
+                  padding: 10,
+                  displayColors: true
+                },
                 legend: {
                   position: "top",
                   onClick: function (e, legendItem, legend) {
@@ -710,8 +985,8 @@
                     color: function (ctx) {
                       var ch = ctx.chart;
                       var hi = ch.options.plugins && ch.options.plugins.highlightIndex;
-                      if (hi == null || ctx.datasetIndex === undefined) return "#94a3b8";
-                      return ctx.datasetIndex === hi ? "#f1f5f9" : "rgba(148, 163, 184, 0.5)";
+                      if (hi == null || ctx.datasetIndex === undefined) return chartTheme.legend;
+                      return ctx.datasetIndex === hi ? chartTheme.axisBold : chartTheme.mutedLine;
                     },
                     font: { size: 12, weight: "600" },
                     padding: 16,
@@ -722,17 +997,30 @@
               },
               scales: {
                 x: {
-                  grid: { color: "rgba(148, 163, 184, 0.12)", drawTicks: true },
-                  ticks: { color: "#94a3b8", maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } }
+                  grid: { color: chartTheme.grid, drawTicks: true },
+                  ticks: { color: chartTheme.axis, maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } }
                 },
                 y: {
-                  grid: { color: "rgba(148, 163, 184, 0.12)" },
-                  ticks: { color: "#94a3b8", font: { size: 11 } },
+                  grid: { color: chartTheme.grid },
+                  ticks: { color: chartTheme.axis, font: { size: 11 } },
                   beginAtZero: true
                 }
+              },
+              interaction: {
+                mode: "index",
+                intersect: false
               }
             };
-            var lineStyle = { borderWidth: 2.5, tension: 0.4, fill: true, pointRadius: 2.5, pointHoverRadius: 6, pointBackgroundColor: "#0f172a", pointBorderWidth: 1 };
+            var lineStyle = {
+              borderWidth: 2.6,
+              tension: 0.42,
+              fill: true,
+              pointRadius: 2.5,
+              pointHoverRadius: 6,
+              pointBackgroundColor: chartTheme.pointBg,
+              pointBorderWidth: 1.2,
+              cubicInterpolationMode: "monotone"
+            };
             if (typeof Chart === "undefined") {
               alert("图表库未加载，请检查网络或刷新页面。");
               return;
@@ -761,6 +1049,8 @@
               var c = document.getElementById(canvasId);
               var nd = document.getElementById(noDataId);
               if (!c) return;
+              var subLabels = (payload && payload.labels) || [];
+              applyAdaptiveCanvasHeight(c, subLabels.length, false);
               if (!payload || !payload.datasets || payload.datasets.length === 0) {
                 if (nd) nd.style.display = "block";
                 return;
@@ -777,7 +1067,7 @@
               });
               reportChartInstances.push(new Chart(c, {
                 type: "line",
-                data: { labels: formatChartLabels(payload.labels, reportMode), datasets: datasets },
+                data: { labels: formatChartLabels(subLabels, reportMode), datasets: datasets },
                 options: chartOpts
               }));
             }

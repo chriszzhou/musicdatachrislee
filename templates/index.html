@@ -54,17 +54,56 @@
     body[data-theme="light"] {
       background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
     }
-    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
+    .page {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 14px 18px 24px;
+    }
+    @media (min-width: 1700px) {
+      .page { padding: 16px 28px 28px; }
+    }
     .header-card {
+      position: relative;
+      overflow: hidden;
       background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px 20px;
       box-shadow: var(--shadow-soft);
-      margin-bottom: 14px;
+      margin-bottom: 12px;
+    }
+    .header-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(150, 182, 230, 0.18) 0%, rgba(11, 20, 34, 0.04) 100%);
+      pointer-events: none;
+    }
+    .header-card::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      bottom: 8px;
+      width: min(560px, 48vw);
+      background: url("/scripts/first.jpg") right center / contain no-repeat;
+      opacity: 0.62;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .header-card > * {
+      position: relative;
+      z-index: 2;
     }
     body[data-theme="light"] .header-card {
       background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+    }
+    body[data-theme="light"] .header-card::before {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(233, 241, 255, 0.08) 100%);
+    }
+    body[data-theme="light"] .header-card::after {
+      opacity: 0.69;
     }
     .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
     .subtitle { color: var(--muted); font-size: 14px; }
@@ -96,8 +135,20 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 14px 14px 12px;
-      margin-top: 12px;
+      margin-top: 0;
       box-shadow: var(--shadow-soft);
+    }
+    .home-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .home-grid .block { min-width: 0; }
+    .block--full { grid-column: 1 / -1; }
+    @media (max-width: 1220px) {
+      .home-grid { grid-template-columns: 1fr; }
+      .block--full { grid-column: auto; }
     }
     .block h3 {
       margin: 0 0 10px;
@@ -119,6 +170,24 @@
       outline: none;
       border-color: #8fb3ff;
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    body[data-theme="dark"] input,
+    body[data-theme="dark"] select {
+      background: #131c28;
+      border-color: #2d3a50;
+      color: #d7e1f0;
+    }
+    body[data-theme="dark"] input::placeholder {
+      color: #8fa2bc;
+    }
+    body[data-theme="dark"] input:focus,
+    body[data-theme="dark"] select:focus {
+      border-color: #5f8fd6;
+      box-shadow: 0 0 0 3px rgba(95, 143, 214, 0.18);
+    }
+    body[data-theme="dark"] select option {
+      background: #131c28;
+      color: #d7e1f0;
     }
     button {
       border: 0;
@@ -184,6 +253,21 @@
     }
     tr:last-child td { border-bottom: none; }
     tr:nth-child(even) td { background: var(--table-row-even); }
+    body[data-theme="dark"] table {
+      border-color: #2a3446;
+      background: #161e2a;
+    }
+    body[data-theme="dark"] th,
+    body[data-theme="dark"] td {
+      border-bottom-color: #273246;
+      color: #d2dceb;
+    }
+    body[data-theme="dark"] th {
+      background: #202a3a;
+      color: #d9e3f2;
+    }
+    body[data-theme="dark"] tr:nth-child(odd) td { background: #171f2b; }
+    body[data-theme="dark"] tr:nth-child(even) td { background: #141c27; }
     table td a {
       color: #2563eb;
       text-decoration: none;
@@ -272,6 +356,15 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    body[data-theme="dark"] .milestone-song-group {
+      border-color: #2b374b;
+      background: linear-gradient(180deg, #151f2d 0%, #131c28 100%);
+    }
+    body[data-theme="dark"] .milestone-song-title {
+      color: #d3def0;
+      background: linear-gradient(90deg, #1f2a3b 0%, #1a2434 100%);
+      border-bottom-color: #2b374b;
+    }
     table.milestone-table {
       width: 100%;
       margin: 0;
@@ -289,6 +382,22 @@
     table.milestone-subtable { border-top: none; }
     table.milestone-subtable th { background: #f3f5fc; font-size: 11px; }
     table.milestone-subtable td { font-size: 12px; }
+    table.milestone-subtable { table-layout: fixed; }
+    table.milestone-subtable th:nth-child(1),
+    table.milestone-subtable td:nth-child(1) { width: 46%; }
+    table.milestone-subtable th:nth-child(2),
+    table.milestone-subtable td:nth-child(2) {
+      width: 28%;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    table.milestone-subtable th:nth-child(3),
+    table.milestone-subtable td:nth-child(3) {
+      width: 26%;
+      white-space: nowrap;
+    }
+    body[data-theme="dark"] table.milestone-table tr:nth-child(even) td { background: #141c27; }
+    body[data-theme="dark"] table.milestone-subtable th { background: #1b2534; }
     .milestone-card-empty {
       padding: 22px 14px;
       text-align: center;
@@ -309,6 +418,16 @@
       background: #fff0f0;
       color: #b91c1c;
       border-color: #f5cccc;
+    }
+    body[data-theme="dark"] button.milestone-delete-btn {
+      background: rgba(154, 172, 191, 0.08);
+      color: #a9bad1;
+      border-color: #2d3a50;
+    }
+    body[data-theme="dark"] button.milestone-delete-btn:hover {
+      background: rgba(198, 93, 102, 0.14);
+      color: #d8b0b4;
+      border-color: #4a3238;
     }
     .topsongs-actions {
       margin-top: 8px;
@@ -444,7 +563,8 @@
       margin-top: 10px;
     }
     .search-song-grid .milestone-card-body {
-      max-height: min(72vh, 880px);
+      max-height: none;
+      overflow: visible;
     }
     table.search-song-table {
       font-size: 13px;
@@ -515,10 +635,14 @@
     }
     .topsongs-echart {
       width: 100%;
-      height: 420px;
+      height: 340px;
     }
     #topsongs-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 1380px) {
+      #topsongs-grid { grid-template-columns: 1fr; }
     }
     #topsongs-grid .milestone-card-body {
       max-height: none;
@@ -556,7 +680,8 @@
   <div class="err">{{ error }}</div>
   {% endif %}
 
-  <div class="block">
+  <div class="home-grid">
+  <div class="block block--full">
     <div class="block-head">
       <h3>1) 三平台概览</h3>
     </div>
@@ -604,22 +729,21 @@
     </div>
   </div>
 
-  <div class="block">
+  <div class="block block--full">
     <div class="block-head">
       <h3>2) 歌曲搜索</h3>
     </div>
     <div id="block-search-body">
-      <p class="subtitle">在三平台（QQ / 网易云 / 酷狗）各自<strong>最新一次快照</strong>中搜索，歌曲名或专辑名包含关键词即匹配；每平台最多展示 <strong>5</strong> 条。</p>
-      <form method="post" action="/action/search-songs" class="row js-progress-form" data-progress-label="歌曲搜索中">
+      <form method="post" action="/action/search-songs" class="row js-progress-form js-search-form" data-progress-label="歌曲搜索中" autocomplete="off">
         <input type="hidden" name="platform" value="{{ platform }}" />
-        <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" />
+        <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" autocomplete="off" />
         <button type="submit">搜索</button>
       </form>
       <div class="progress-wrap js-progress-wrap">
         <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
         <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
       </div>
-
+      <div id="search-result-wrap">
       {% if result_type == "search-songs" %}
       {% if result.get("ok") %}
       <p class="subtitle" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,0.25);">关键词「{{ result.get("keyword", "") }}」</p>
@@ -665,16 +789,17 @@
       <div class="err" style="margin-top: 14px;">{{ result.get("error", "搜索失败") }}</div>
       {% endif %}
       {% endif %}
+      </div>
     </div>
   </div>
 
-  <div class="block">
+  <div class="block block--full">
     <div class="block-head">
       <h3>3) <a href="/changereport">歌手数据变化</a></h3>
     </div>
   </div>
 
-  <div class="block">
+  <div class="block block--full">
     <div class="block-head">
       <h3>4) 歌曲 TOP10</h3>
       <button type="button" class="block-toggle" data-target="block-topsongs-body" aria-expanded="false">显示</button>
@@ -688,7 +813,7 @@
     </div>
   </div>
 
-  <div class="block">
+  <div class="block block--full">
     <div class="block-head">
       <h3>5) 榜单数据</h3>
       <button type="button" class="block-toggle" data-target="block-toplist-body" aria-expanded="false">显示</button>
@@ -703,7 +828,7 @@
     </div>
   </div>
 
-  <div class="block">
+  <div class="block block--full">
     <div class="block-head">
       <h3>6) 里程碑</h3>
       <button type="button" class="block-toggle" data-target="block-milestone-body" aria-expanded="false">显示</button>
@@ -716,6 +841,7 @@
         <div id="milestone-log-err" class="err" style="display:none;"></div>
       </div>
     </div>
+  </div>
   </div>
 
   <script>
@@ -814,13 +940,8 @@
           barEnd: dark ? "#5e83bb" : "#2563eb"
         };
       }
-      function initHomePies() {
-        var el = document.getElementById("home-metrics-json");
-        if (!el || typeof echarts === "undefined") return;
-        var raw = (el.textContent || "").trim();
-        if (!raw) return;
-        var m;
-        try { m = JSON.parse(raw); } catch (e) { return; }
+      function renderHomePiesFromData(m) {
+        if (!m || typeof echarts === "undefined") return;
         var by = m.by_platform || {};
         var order = ["qq", "netease", "kugou"];
         var labels = order.map(function (p) {
@@ -910,7 +1031,41 @@
         setupPie("home-pie-favorite", "home-pie-empty-favorite", favs);
         setupPie("home-pie-comment", "home-pie-empty-comment", coms);
       }
+      function initHomePies() {
+        var el = document.getElementById("home-metrics-json");
+        if (!el || typeof echarts === "undefined") return;
+        var raw = (el.textContent || "").trim();
+        if (!raw) return;
+        var m;
+        try { m = JSON.parse(raw); } catch (e) { return; }
+        renderHomePiesFromData(m);
+      }
       initHomePies();
+
+      function refreshHomeMetrics() {
+        return fetch("/api/home-metrics?_=" + Date.now())
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var el = document.getElementById("home-metrics-json");
+            if (el) {
+              try { el.textContent = JSON.stringify(data || {}); } catch (e) {}
+            }
+            renderHomePiesFromData(data || {});
+          })
+          .catch(function () {});
+      }
+
+      function refreshTopSongsAfterCrawl() {
+        var body = document.getElementById("block-topsongs-body");
+        if (!body) return;
+        if (body.classList.contains("is-open")) {
+          loadTopSongsInit();
+          topsongsInited = true;
+        } else {
+          // 下次展开时自动走最新数据
+          topsongsInited = false;
+        }
+      }
 
       var isSubmitting = false;
       var lock = document.getElementById("global-lock");
@@ -939,7 +1094,82 @@
           .replace(/'/g, "&#039;");
       }
 
-      var forms = document.querySelectorAll(".js-progress-form");
+      function searchSongNameCellHtml(plat, row) {
+        var name = escapeHtml(row.song_name || "-");
+        var songMid = row.song_mid || "";
+        var mixsongid = row.mixsongid;
+        if (plat === "qq" && songMid) {
+          return "<a href=\"https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid="
+            + encodeURIComponent(songMid)
+            + "&type=" + encodeURIComponent(songMid)
+            + "&openinqqmusic=0\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开歌曲热度页\">"
+            + name + "</a>";
+        }
+        if (plat === "kugou") {
+          if (mixsongid != null && mixsongid !== "") {
+            return "<a href=\"https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid="
+              + encodeURIComponent(String(mixsongid))
+              + "\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开歌曲热度页\">"
+              + name + "</a>";
+          }
+          if (songMid) {
+            return "<a href=\"https://www.kugou.com/song/#hash="
+              + encodeURIComponent(songMid)
+              + "\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开酷狗播放页\">"
+              + name + "</a>";
+          }
+        }
+        return name;
+      }
+
+      function renderSearchSongsResult(data) {
+        var host = document.getElementById("search-result-wrap");
+        if (!host) return;
+        if (!data || !data.ok) {
+          host.innerHTML = "<div class=\"err\" style=\"margin-top: 14px;\">"
+            + escapeHtml((data && data.error) || "搜索失败")
+            + "</div>";
+          return;
+        }
+        var keyword = escapeHtml(data.keyword || "");
+        var order = [
+          { key: "qq", title: "QQ音乐" },
+          { key: "netease", title: "网易云音乐" },
+          { key: "kugou", title: "酷狗音乐" }
+        ];
+        var html = "";
+        html += "<p class=\"subtitle\" style=\"margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,0.25);\">关键词「" + keyword + "」</p>";
+        html += "<div class=\"milestone-grid search-song-grid\">";
+        order.forEach(function (p) {
+          var pdata = (data.by_platform && data.by_platform[p.key]) || {};
+          html += "<div class=\"milestone-card milestone-card--" + p.key + "\">";
+          html += "<div class=\"milestone-card-head\">" + escapeHtml(p.title) + "</div>";
+          html += "<div class=\"milestone-card-body\">";
+          if (pdata.ok) {
+            if (Array.isArray(pdata.rows) && pdata.rows.length > 0) {
+              html += "<table class=\"milestone-table search-song-table\"><thead><tr><th>歌曲名</th><th>专辑</th><th>评论</th><th>收藏</th></tr></thead><tbody>";
+              pdata.rows.forEach(function (row) {
+                html += "<tr>";
+                html += "<td class=\"search-song-name\">" + searchSongNameCellHtml(p.key, row || {}) + "</td>";
+                html += "<td>" + escapeHtml((row && row.album_name) || "-") + "</td>";
+                html += "<td>" + escapeHtml(String((row && row.comment_count) != null ? row.comment_count : 0)) + "</td>";
+                html += "<td>" + escapeHtml(String((row && row.favorite_count) != null ? row.favorite_count : 0)) + "</td>";
+                html += "</tr>";
+              });
+              html += "</tbody></table>";
+            } else {
+              html += "<div class=\"milestone-card-empty\">未匹配到歌曲</div>";
+            }
+          } else {
+            html += "<div class=\"milestone-card-empty\">" + escapeHtml(pdata.error || "该平台搜索失败") + "</div>";
+          }
+          html += "</div></div>";
+        });
+        html += "</div>";
+        host.innerHTML = html;
+      }
+
+      var forms = document.querySelectorAll(".js-progress-form:not(.js-search-form)");
       forms.forEach(function (form) {
         form.addEventListener("submit", function () {
           if (isSubmitting) {
@@ -977,6 +1207,64 @@
           }, { once: true });
         });
       });
+
+      var searchForm = document.querySelector(".js-search-form");
+      if (searchForm) {
+        searchForm.addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          if (isSubmitting) return false;
+          setGlobalSubmitting(true);
+
+          var block = searchForm.closest(".block");
+          var wrap = block ? block.querySelector(".js-progress-wrap") : null;
+          var fill = block ? block.querySelector(".js-progress-fill") : null;
+          var text = block ? block.querySelector(".js-progress-text") : null;
+          var timer = null;
+          var progress = 1;
+          var elapsed = 0;
+          if (wrap && fill && text) {
+            wrap.style.display = "block";
+            fill.style.width = progress + "%";
+            text.textContent = "歌曲搜索中... " + progress + "% (" + elapsed + "秒)";
+            timer = setInterval(function () {
+              elapsed += 1;
+              if (progress < 90) {
+                var step = progress < 40 ? 6 : progress < 70 ? 3 : 1;
+                progress = Math.min(90, progress + step);
+                fill.style.width = progress + "%";
+              }
+              text.textContent = "歌曲搜索中... " + progress + "% (" + elapsed + "秒)";
+            }, 1000);
+          }
+
+          var kwInput = searchForm.querySelector("input[name='song_keyword']");
+          var keyword = kwInput ? String(kwInput.value || "").trim() : "";
+          var url = "/api/search-songs?" + new URLSearchParams({
+            song_keyword: keyword,
+            limit: "5",
+            _: String(Date.now())
+          }).toString();
+          fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              renderSearchSongsResult(data);
+            })
+            .catch(function () {
+              renderSearchSongsResult({ ok: false, error: "请求失败" });
+            })
+            .finally(function () {
+              if (timer) clearInterval(timer);
+              if (fill) fill.style.width = "100%";
+              if (text) text.textContent = "歌曲搜索完成";
+              setTimeout(function () {
+                if (wrap) wrap.style.display = "none";
+                if (fill) fill.style.width = "0%";
+                setGlobalSubmitting(false);
+              }, 250);
+            });
+          return false;
+        });
+      }
 
       /** 同一平台内按歌曲分组；组内先按榜单名再按排名 */
       function groupToplistBySong(rows) {
@@ -1286,14 +1574,14 @@
         if (old) {
           try { old.dispose(); } catch (e) {}
         }
-        var chartHeight = Math.max(420, state.length * 40 + 90);
+        var chartHeight = Math.max(320, state.length * 30 + 70);
         holder.style.height = String(chartHeight) + "px";
         var chart = echarts.init(holder);
         var palette = getThemePalette();
         var yLabels = state.map(function (r) { return String(r.rank || "-") + ". " + r.name; });
         var vals = state.map(function (r) { return Number(r.value) || 0; });
         chart.setOption({
-          grid: { left: 10, right: 18, top: 10, bottom: 8, containLabel: true },
+          grid: { left: 6, right: 12, top: 10, bottom: 8, containLabel: true },
           tooltip: {
             trigger: "axis",
             axisPointer: { type: "shadow", shadowStyle: { color: "rgba(100,116,139,0.12)" } },
@@ -1318,9 +1606,9 @@
             axisLabel: {
               color: palette.text,
               interval: 0,
-              width: 240,
+              width: 140,
               overflow: "truncate",
-              margin: 10
+              margin: 8
             }
           },
           series: [{
@@ -1457,9 +1745,34 @@
         });
       }
 
+      var lastSeenCrawlFinishedAt = "";
+      function handleCrawlRoundFinished(at) {
+        if (!at || at === lastSeenCrawlFinishedAt) return;
+        var firstInit = lastSeenCrawlFinishedAt === "";
+        lastSeenCrawlFinishedAt = at;
+        // 首次仅记录时间；后续变更才触发刷新
+        if (firstInit) return;
+        refreshHomeMetrics();
+        refreshTopSongsAfterCrawl();
+        loadMilestoneLogs(false);
+      }
+      function pollCrawlTrackStatus() {
+        fetch("/api/crawl-track/status?_=" + Date.now())
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || !data.ok) return;
+            handleCrawlRoundFinished(String(data.last_finished_at || ""));
+          })
+          .catch(function () {});
+      }
+
       loadToplistHistory(true);
       loadMilestoneLogs(true);
-      setInterval(function () { loadToplistHistory(false); loadMilestoneLogs(false); }, 60 * 1000);
+      pollCrawlTrackStatus();
+      setInterval(function () {
+        loadToplistHistory(false);
+        pollCrawlTrackStatus();
+      }, 20 * 1000);
     })();
   </script>
   </div>

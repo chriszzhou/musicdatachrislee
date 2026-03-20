@@ -7,60 +7,221 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     :root {
+      --bg: #0f141d;
+      --card: #171f2b;
+      --border: #2a3547;
+      --text: #d7e1f0;
+      --muted: #93a4ba;
+      --primary: #5f8fd6;
+      --primary-deep: #4f7fc8;
+      --error-bg: #341c22;
+      --error-text: #ffa2b1;
+      --table-head-bg: #202a3a;
+      --table-row-even: #141c27;
+      --card-soft: #121a26;
+      --shadow-soft: 0 10px 24px rgba(6, 10, 20, 0.32);
+      --chart-grid: rgba(154, 172, 191, 0.2);
+    }
+    body[data-theme="light"] {
       --bg: #f4f7ff;
       --card: #ffffff;
       --border: #e3e8f5;
       --text: #1f2a44;
       --muted: #65708a;
       --primary: #3b82f6;
+      --primary-deep: #2563eb;
       --error-bg: #fef2f2;
       --error-text: #b91c1c;
+      --table-head-bg: #f0f4ff;
+      --table-row-even: #fafcff;
+      --card-soft: #fbfdff;
+      --shadow-soft: 0 8px 24px rgba(30, 70, 140, 0.08);
+      --chart-grid: rgba(148, 163, 184, 0.28);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      background: radial-gradient(circle at top left, #232f42 0%, var(--bg) 34%, var(--bg) 100%);
       line-height: 1.55;
     }
-    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
+    body[data-theme="light"] {
+      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+    }
+    .page {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 14px 18px 24px;
+    }
+    @media (min-width: 1700px) {
+      .page { padding: 16px 28px 28px; }
+    }
     .header-card {
-      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px 20px;
-      box-shadow: 0 8px 24px rgba(30, 70, 140, 0.08);
-      margin-bottom: 14px;
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 12px;
+    }
+    .header-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(150, 182, 230, 0.18) 0%, rgba(11, 20, 34, 0.04) 100%);
+      pointer-events: none;
+    }
+    .header-card::after {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      bottom: 8px;
+      width: min(560px, 48vw);
+      background: url("/scripts/first.jpg") right center / contain no-repeat;
+      opacity: 0.62;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .header-card > * {
+      position: relative;
+      z-index: 2;
+    }
+    body[data-theme="light"] .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+    }
+    body[data-theme="light"] .header-card::before {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(233, 241, 255, 0.08) 100%);
+    }
+    body[data-theme="light"] .header-card::after {
+      opacity: 0.69;
     }
     .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
     .subtitle { color: var(--muted); font-size: 14px; }
-    .nav-links { margin-top: 10px; }
+    .header-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .nav-links { margin-top: 0; }
     .nav-links a { color: var(--primary); text-decoration: none; margin-right: 14px; }
     .nav-links a:hover { text-decoration: underline; }
+    button.theme-toggle {
+      min-height: 30px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      box-shadow: none;
+      border: 1px solid var(--border);
+      background: #1f2c3f;
+      color: #d7e4fa;
+      cursor: pointer;
+    }
+    body[data-theme="light"] button.theme-toggle {
+      background: #fff;
+      color: #334155;
+    }
     .block {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 14px 14px 12px;
       margin-top: 12px;
-      box-shadow: 0 6px 18px rgba(30, 70, 140, 0.06);
+      box-shadow: var(--shadow-soft);
     }
-    .block h3 { margin: 0 0 10px; font-size: 17px; font-weight: 650; color: #20335f; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .block h3 { margin: 0 0 10px; font-size: 17px; font-weight: 650; color: var(--text); }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--card);
+    }
     th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-    th { background: #f0f4ff; font-weight: 600; }
+    th { background: var(--table-head-bg); font-weight: 600; }
+    tr:nth-child(even) td { background: var(--table-row-even); }
+    tr:last-child td { border-bottom: none; }
     .err { color: var(--error-text); background: var(--error-bg); padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
     .chart-wrap {
-      margin-top: 14px; margin-bottom: 24px;
-      max-width: 640px; height: 240px;
+      margin-top: 0;
+      margin-bottom: 0;
+      width: 100%;
+      max-width: none;
+      height: 240px;
       padding: 16px;
-      background: linear-gradient(145deg, #fafbff 0%, #f0f4ff 100%);
+      background: var(--card-soft);
       border-radius: 12px;
-      border: 1px solid rgba(59, 130, 246, 0.12);
-      box-shadow: 0 2px 12px rgba(30, 70, 140, 0.06);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
     }
     .chart-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; letter-spacing: 0.02em; }
+    .charts-row {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+    .milestone-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 10px;
+    }
+    .milestone-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--card);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .milestone-card-head {
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 650;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .milestone-card--qq .milestone-card-head { background: linear-gradient(135deg, #2f9960 0%, #25764d 100%); }
+    .milestone-card--netease .milestone-card-head { background: linear-gradient(135deg, #c65d66 0%, #a2474f 100%); }
+    .milestone-card--kugou .milestone-card-head { background: linear-gradient(135deg, #4297c9 0%, #3477a1 100%); }
+    .milestone-card-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      max-height: 360px;
+      padding-bottom: 4px;
+    }
+    .milestone-card-empty {
+      padding: 22px 14px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    table.milestone-table {
+      width: 100%;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      font-size: 13px;
+    }
+    table.milestone-table th {
+      background: var(--table-head-bg);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    @media (max-width: 1180px) {
+      .charts-row { grid-template-columns: 1fr; }
+      .milestone-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -69,8 +230,10 @@
       <h1 class="title">新歌 - {{ new_song_name }}</h1>
       <p class="subtitle">数据{% if new_song_update_interval_sec >= 60 and new_song_update_interval_sec % 60 == 0 %}约每 {{ new_song_update_interval_sec // 60 }} 分钟{% else %}约每 {{ new_song_update_interval_sec }} 秒{% endif %}从三平台拉取并写入各平台最新快照</p>
       <p class="subtitle" id="last-update-line"><span id="last-update-at">--</span></p>
-      <div class="nav-links">
-        <a href="/">← 首页</a>
+      <div class="header-actions">
+        <div class="nav-links">
+          <a href="/">← 首页</a>
+        </div>
       </div>
     </div>
 
@@ -90,9 +253,11 @@
     <div class="block">
       <h3>二、收藏数曲线（三图）</h3>
       <p class="subtitle">从开始统计（3.16）到当前时间，均匀取约 10 个时间点，Y 轴为各时刻收藏数</p>
-      <div id="chart-qq" class="chart-wrap"><div class="chart-title">QQ音乐</div><canvas id="canvas-qq"></canvas></div>
-      <div id="chart-netease" class="chart-wrap"><div class="chart-title">网易云音乐</div><canvas id="canvas-netease"></canvas></div>
-      <div id="chart-kugou" class="chart-wrap"><div class="chart-title">酷狗音乐</div><canvas id="canvas-kugou"></canvas></div>
+      <div class="charts-row">
+        <div id="chart-qq" class="chart-wrap"><div class="chart-title">QQ音乐</div><canvas id="canvas-qq"></canvas></div>
+        <div id="chart-netease" class="chart-wrap"><div class="chart-title">网易云音乐</div><canvas id="canvas-netease"></canvas></div>
+        <div id="chart-kugou" class="chart-wrap"><div class="chart-title">酷狗音乐</div><canvas id="canvas-kugou"></canvas></div>
+      </div>
     </div>
 
     <div class="block">
@@ -100,12 +265,7 @@
       <p class="subtitle">来自各平台 toplist 库中「{{ new_song_name }}」的上榜记录</p>
       <div id="toplist-loading" class="subtitle">加载中...</div>
       <div id="toplist-err" class="err" style="display:none;"></div>
-      <table id="toplist-table" style="display:none;">
-        <thead>
-          <tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th></tr>
-        </thead>
-        <tbody id="toplist-tbody"></tbody>
-      </table>
+      <div id="toplist-grid" class="milestone-grid" style="display:none;"></div>
       <div id="toplist-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无上榜记录</div>
     </div>
   </div>
@@ -114,6 +274,52 @@
 (function () {
   var today = new Date();
   var value = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+  function getTheme() {
+    return document.body.getAttribute("data-theme") || "dark";
+  }
+  function applyTheme(theme) {
+    var t = theme === "light" ? "light" : "dark";
+    document.body.setAttribute("data-theme", t);
+    var btn = document.getElementById("theme-toggle");
+    if (btn) btn.textContent = t === "dark" ? "切换为浅色" : "切换为深色";
+    try { localStorage.setItem("qqmc_theme", t); } catch (e) {}
+  }
+  function initThemeToggle() {
+    var saved = "";
+    try { saved = localStorage.getItem("qqmc_theme") || ""; } catch (e) {}
+    applyTheme(saved === "light" ? "light" : "dark");
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      applyTheme(getTheme() === "dark" ? "light" : "dark");
+      loadCharts();
+    });
+  }
+  initThemeToggle();
+
+  function getThemePalette(platform) {
+    var dark = getTheme() === "dark";
+    var base = {
+      qq: { main: "#4fae72", fill: "rgba(79,174,114,0.20)", glow: "rgba(79,174,114,0.28)" },
+      netease: { main: "#c07b82", fill: "rgba(192,123,130,0.18)", glow: "rgba(192,123,130,0.26)" },
+      kugou: { main: "#6da1c8", fill: "rgba(109,161,200,0.18)", glow: "rgba(109,161,200,0.26)" }
+    };
+    var light = {
+      qq: { main: "rgb(0, 180, 42)", fill: "rgba(0, 180, 42, 0.15)", glow: "rgba(0, 180, 42, 0.25)" },
+      netease: { main: "rgb(212, 58, 58)", fill: "rgba(212, 58, 58, 0.12)", glow: "rgba(212, 58, 58, 0.22)" },
+      kugou: { main: "rgb(255, 138, 0)", fill: "rgba(255, 138, 0, 0.15)", glow: "rgba(255, 138, 0, 0.25)" }
+    };
+    var cur = (dark ? base : light)[platform] || (dark ? base.qq : light.qq);
+    return {
+      main: cur.main,
+      fill: cur.fill,
+      glow: cur.glow,
+      tick: dark ? "#94a9cf" : "#65708a",
+      axis: dark ? "#d7e1f0" : "#1f2a44",
+      grid: dark ? "rgba(154,172,191,0.20)" : "rgba(0,0,0,0.06)",
+      tooltipBg: dark ? "rgba(20, 28, 39, 0.92)" : "rgba(31, 42, 68, 0.9)"
+    };
+  }
 
   function applyServerDateToday(serverDate) {
     if (serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate)) value = serverDate;
@@ -186,12 +392,6 @@
     return { labels: sampledLabels, fav: sampledFav };
   }
 
-  var chartColors = {
-    qq:     { main: "rgb(0, 180, 42)",   fill: "rgba(0, 180, 42, 0.15)",   glow: "rgba(0, 180, 42, 0.25)" },
-    netease: { main: "rgb(212, 58, 58)", fill: "rgba(212, 58, 58, 0.12)",  glow: "rgba(212, 58, 58, 0.22)" },
-    kugou:  { main: "rgb(255, 138, 0)",  fill: "rgba(255, 138, 0, 0.15)",  glow: "rgba(255, 138, 0, 0.25)" }
-  };
-
   var chartInstances = {};
   function drawChart(canvasId, platform, title) {
     if (chartInstances[canvasId]) {
@@ -223,7 +423,7 @@
         var canvas = document.getElementById(canvasId);
         if (!canvas) return;
         var ctx = canvas.getContext("2d");
-        var colors = chartColors[platform] || chartColors.qq;
+        var colors = getThemePalette(platform);
         var h = 240;
         var gradient = ctx.createLinearGradient(0, 0, 0, h);
         gradient.addColorStop(0, colors.fill);
@@ -257,7 +457,7 @@
             plugins: {
               legend: { display: false },
               tooltip: {
-                backgroundColor: "rgba(31, 42, 68, 0.9)",
+                backgroundColor: colors.tooltipBg,
                 titleFont: { size: 12, weight: "600" },
                 bodyFont: { size: 13 },
                 padding: 10,
@@ -268,14 +468,14 @@
             scales: {
               y: {
                 beginAtZero: true,
-                grid: { color: "rgba(0,0,0,0.06)", drawBorder: false },
-                ticks: { font: { size: 11 }, color: "#65708a", padding: 6 }
+                grid: { color: colors.grid, drawBorder: false },
+                ticks: { font: { size: 11 }, color: colors.tick, padding: 6 }
               },
               x: {
                 grid: { display: false },
                 ticks: {
                   font: { size: 13, weight: "500" },
-                  color: "#1f2a44",
+                  color: colors.axis,
                   maxRotation: 45,
                   minRotation: 25,
                   padding: 10
@@ -297,9 +497,20 @@
   function loadToplist() {
     var loading = document.getElementById("toplist-loading");
     var errEl = document.getElementById("toplist-err");
-    var table = document.getElementById("toplist-table");
-    var tbody = document.getElementById("toplist-tbody");
+    var grid = document.getElementById("toplist-grid");
     var empty = document.getElementById("toplist-empty");
+    var order = [
+      { key: "qq", cls: "milestone-card--qq", title: "QQ音乐" },
+      { key: "netease", cls: "milestone-card--netease", title: "网易云音乐" },
+      { key: "kugou", cls: "milestone-card--kugou", title: "酷狗音乐" }
+    ];
+    function esc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
     fetch("/api/new-song/toplist?_=" + Date.now())
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -311,18 +522,39 @@
         }
         errEl.style.display = "none";
         var items = data.items || [];
-        var html = "";
+        var byPlatform = {};
         items.forEach(function (item) {
-          (item.rows || []).forEach(function (row) {
-            html += "<tr><td>" + (item.platform_name || item.platform) + "</td><td>" + (row.top_name || "-") + "</td><td>" + (row.rank != null ? row.rank : "-") + "</td><td>" + (row.song_name || "-") + "</td></tr>";
-          });
+          byPlatform[item.platform] = item;
         });
-        tbody.innerHTML = html;
-        if (html) {
-          table.style.display = "table";
-          empty.style.display = "none";
-        } else {
+        var anyRows = items.some(function (it) { return (it.rows || []).length > 0; });
+        if (!anyRows) {
+          if (grid) { grid.style.display = "none"; grid.innerHTML = ""; }
           empty.style.display = "block";
+          return;
+        }
+        var html = "";
+        order.forEach(function (p) {
+          var item = byPlatform[p.key];
+          var rows = item && Array.isArray(item.rows) ? item.rows : [];
+          html += "<div class=\"milestone-card " + p.cls + "\">";
+          html += "<div class=\"milestone-card-head\">" + esc((item && item.platform_name) || p.title) + "</div>";
+          html += "<div class=\"milestone-card-body\">";
+          if (!rows.length) {
+            html += "<div class=\"milestone-card-empty\">暂无记录</div>";
+          } else {
+            html += "<table class=\"milestone-table\"><thead><tr><th>榜单</th><th>排名</th><th>歌曲</th></tr></thead><tbody>";
+            rows.forEach(function (row) {
+              html += "<tr><td>" + esc((row.top_name || "-") + ((row.top_period || "").trim() ? " · " + row.top_period : "")) + "</td><td>#"
+                + esc(String(row.rank != null ? row.rank : "-")) + "</td><td>" + esc(row.song_name || "-") + "</td></tr>";
+            });
+            html += "</tbody></table>";
+          }
+          html += "</div></div>";
+        });
+        if (grid) {
+          grid.innerHTML = html;
+          grid.style.display = "grid";
+          empty.style.display = "none";
         }
       })
       .catch(function (e) {

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..crawler import CrawlerService
 from ..sqlite_util import connect_sqlite
 from ..storage import Storage
+from ..toplist_freshness import BEIJING_TZ, filter_toplist_rows_for_today
 from ..toplist_storage import (
     get_artist_mid_from_toplist_db,
     query_artist_toplist_hits_since,
@@ -378,6 +379,7 @@ def get_new_song_chart_data(
 def get_new_song_toplist_rows(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
     """新歌页用：三平台榜单中「春雨里」的上榜记录（从各 toplist 库查）。同一榜单同一天只保留最新一条（按 last_seen_at 取最大）。"""
     base_dir = (base_dir or Path(".")).resolve()
+    today_bj = datetime.now(BEIJING_TZ).date()
     result: List[Dict[str, Any]] = []
     for platform in SUPPORTED_PLATFORMS:
         meta = get_platform_meta(platform)
@@ -386,7 +388,13 @@ def get_new_song_toplist_rows(base_dir: Optional[Path] = None) -> List[Dict[str,
         if not artist_mid:
             continue
         rows = query_artist_toplist_hits_since(db_file, artist_mid, "2000-01-01 00:00:00", limit=500)
-        song_rows = [r for r in rows if (r.get("song_name") or "").strip() == NEW_SONG_NAME or NEW_SONG_NAME in (r.get("song_name") or "")]
+        rows_fresh, _ = filter_toplist_rows_for_today(list(rows), today_bj)
+        song_rows = [
+            r
+            for r in rows_fresh
+            if (r.get("song_name") or "").strip() == NEW_SONG_NAME
+            or NEW_SONG_NAME in (r.get("song_name") or "")
+        ]
         if not song_rows:
             continue
         # 同一榜单（top_id + top_name）只保留 last_seen_at 最新的一条
