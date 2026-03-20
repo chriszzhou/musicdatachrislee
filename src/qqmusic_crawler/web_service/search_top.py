@@ -5,14 +5,100 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..crawler import CrawlerService
 from ..sqlite_util import connect_sqlite
 
-from .clients import build_client, _resolve_artist
 from .paths import (
+    SUPPORTED_PLATFORMS,
     _resolve_snapshots_dir,
     get_platform_meta,
 )
+
+
+def _parse_snapshot_stem_for_artist_mid(stem: str, prefix: str) -> Optional[str]:
+    """
+    快照文件名（无 .db）与 crawl_ops 一致：prefix_artist_mid_YYYYMMDD_HHMMSS。
+    artist_mid 本身可含下划线，日期、时间各占一段。
+    """
+    exp = prefix + "_"
+    if not stem.startswith(exp):
+        return None
+    rest = stem[len(exp) :]
+    parts = rest.split("_")
+    if len(parts) < 3:
+        return None
+    if not (
+        len(parts[-2]) == 8
+        and parts[-2].isdigit()
+        and len(parts[-1]) == 6
+        and parts[-1].isdigit()
+    ):
+        return None
+    mid = "_".join(parts[:-2])
+    return mid if mid else None
+
+
+def _latest_snapshot_paths_by_artist_mid(snapshots_dir: Path, prefix: str) -> Dict[str, Path]:
+    """每个 artist_mid 只保留 mtime 最新的一份快照路径。"""
+    if not snapshots_dir.is_dir():
+        return {}
+    by_mid: Dict[str, Path] = {}
+    for p in snapshots_dir.glob("{}_*.db".format(prefix)):
+        mid = _parse_snapshot_stem_for_artist_mid(p.stem, prefix)
+        if not mid:
+            continue
+        prev = by_mid.get(mid)
+        if prev is None or p.stat().st_mtime > prev.stat().st_mtime:
+            by_mid[mid] = p
+    return by_mid
+
+
+def _artist_display_name_matches(configured: str, db_name: str) -> bool:
+    """配置歌手名与快照 artists.name 是否视为同一人（仅本地匹配，不调接口）。"""
+    a = (configured or "").strip()
+    b = (db_name or "").strip()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    return a.lower() == b.lower()
+
+
+def _find_latest_snapshot_for_configured_artist(
+    snapshots_dir: Path,
+    prefix: str,
+    artist_name: str,
+) -> Optional[Tuple[Path, str, str]]:
+    """
+    在快照目录中，按 artists.name 匹配配置名，返回 (最新快照路径, artist_mid, 库内展示名)。
+    无匹配返回 None。
+    """
+    want = (artist_name or "").strip()
+    if not want:
+        return None
+    by_mid = _latest_snapshot_paths_by_artist_mid(snapshots_dir, prefix)
+    if not by_mid:
+        return None
+    best: Optional[Tuple[Path, str, str, float]] = None
+    for mid, path in by_mid.items():
+        conn = connect_sqlite(path)
+        try:
+            row = conn.execute(
+                "SELECT name FROM artists WHERE artist_mid = ? LIMIT 1",
+                (mid,),
+            ).fetchone()
+            if not row:
+                continue
+            db_name = (row[0] or "").strip()
+            if not _artist_display_name_matches(want, db_name):
+                continue
+            mtime = path.stat().st_mtime
+            if best is None or mtime > best[3]:
+                best = (path, mid, db_name, mtime)
+        finally:
+            conn.close()
+    if best is None:
+        return None
+    return best[0], best[1], best[2]
 
 def _ensure_songs_mixsongid(conn: sqlite3.Connection) -> None:
     """若 songs 表无 mixsongid 列则添加（兼容旧快照）。"""
@@ -117,6 +203,141 @@ def search_songs(
     }
 
 
+def search_songs_all_platforms(
+    keyword: str,
+    base_dir: Optional[Path] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    """三平台各自最新快照中搜索歌曲；各平台结果独立，失败不影响其它平台。"""
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return {"ok": False, "error": "请输入搜索关键词。", "keyword": "", "by_platform": {}}
+
+    by_platform: Dict[str, Dict[str, Any]] = {}
+    err_parts: List[str] = []
+    for plat in SUPPORTED_PLATFORMS:
+        data = search_songs(platform=plat, keyword=keyword, base_dir=base_dir, limit=limit)
+        by_platform[plat] = data
+        if not data.get("ok"):
+            err_parts.append(
+                "{}: {}".format(
+                    get_platform_meta(plat).get("name", plat),
+                    str(data.get("error") or "失败"),
+                )
+            )
+
+    any_ok = any(by_platform[p].get("ok") for p in SUPPORTED_PLATFORMS)
+    if not any_ok:
+        return {
+            "ok": False,
+            "error": "；".join(err_parts) if err_parts else "三平台搜索均失败。",
+            "keyword": keyword,
+            "by_platform": by_platform,
+        }
+    return {
+        "ok": True,
+        "keyword": keyword,
+        "by_platform": by_platform,
+    }
+
+
+def get_artist_snapshot_metrics_all_platforms(
+    artist_name: str,
+    base_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    各平台「配置歌手」最新快照：粉丝数、全库歌曲收藏合计、评论合计（首页饼图用）。
+    仅从本地快照库解析，不调各平台 HTTP 接口；按 artists.name 与配置名匹配。
+    """
+    name_stub = (artist_name or "").strip()
+    if not name_stub:
+        return {"ok": False, "error": "未配置歌手名。", "by_platform": {}, "display_name": ""}
+
+    by_platform: Dict[str, Dict[str, Any]] = {}
+    display_name: str = ""
+
+    for plat in SUPPORTED_PLATFORMS:
+        meta = get_platform_meta(plat)
+        pname = meta.get("name", plat)
+        prefix = meta["snapshot_prefix"]
+        snapshots_dir = _resolve_snapshots_dir(plat, base_dir)
+
+        if not snapshots_dir.is_dir():
+            by_platform[plat] = {
+                "ok": False,
+                "error": "无快照目录",
+                "fans": 0,
+                "favorite_sum": 0,
+                "comment_sum": 0,
+                "platform_name": pname,
+            }
+            continue
+
+        found = _find_latest_snapshot_for_configured_artist(
+            snapshots_dir, prefix, name_stub
+        )
+        if not found:
+            by_platform[plat] = {
+                "ok": False,
+                "error": "快照中未找到该歌手",
+                "fans": 0,
+                "favorite_sum": 0,
+                "comment_sum": 0,
+                "platform_name": pname,
+            }
+            continue
+
+        latest, artist_mid, resolved_name = found
+        if (resolved_name or "").strip() and not display_name:
+            display_name = str(resolved_name).strip()
+
+        conn = connect_sqlite(latest)
+        try:
+            fans = 0
+            try:
+                cur = conn.execute(
+                    "SELECT COALESCE(fans, 0) FROM artists WHERE artist_mid = ? LIMIT 1",
+                    (artist_mid,),
+                )
+                row = cur.fetchone()
+                if row and row[0] is not None:
+                    fans = int(row[0])
+            except (sqlite3.OperationalError, TypeError, ValueError):
+                fans = 0
+
+            cur = conn.execute(
+                """
+                SELECT
+                  COALESCE(SUM(COALESCE(favorite_count_text, 0)), 0),
+                  COALESCE(SUM(COALESCE(comment_count, 0)), 0)
+                FROM songs WHERE artist_mid = ?
+                """,
+                (artist_mid,),
+            )
+            sum_row = cur.fetchone()
+            fav_sum = int(sum_row[0] or 0) if sum_row else 0
+            com_sum = int(sum_row[1] or 0) if sum_row else 0
+        finally:
+            conn.close()
+
+        by_platform[plat] = {
+            "ok": True,
+            "fans": fans,
+            "favorite_sum": fav_sum,
+            "comment_sum": com_sum,
+            "platform_name": pname,
+            "artist_mid": artist_mid,
+            "resolved_name": resolved_name,
+            "snapshot_name": latest.name,
+        }
+
+    return {
+        "ok": True,
+        "artist_query": name_stub,
+        "display_name": display_name or name_stub,
+        "by_platform": by_platform,
+    }
+
 
 def get_top_songs(
     platform: str,
@@ -126,23 +347,15 @@ def get_top_songs(
 ) -> Dict[str, Any]:
     top_n_safe = top_n if top_n and top_n > 0 else 15
     meta = get_platform_meta(platform)
-    client = build_client(platform)
-    service = CrawlerService(client=client)
-    try:
-        resolved = _resolve_artist(service, artist_name)
-        if not resolved:
-            return {"ok": False, "error": "未找到歌手，请重试。"}
-        artist_mid, resolved_name = resolved
-    finally:
-        client.close()
-
     snapshots_dir = _resolve_snapshots_dir(platform, base_dir)
-    candidates = sorted(
-        snapshots_dir.glob("{}_{}_*.db".format(meta["snapshot_prefix"], artist_mid))
+    found = _find_latest_snapshot_for_configured_artist(
+        snapshots_dir,
+        meta["snapshot_prefix"],
+        artist_name,
     )
-    if not candidates:
-        return {"ok": False, "error": "未找到该歌手快照，请先执行抓取。"}
-    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    if not found:
+        return {"ok": False, "error": "快照中未找到该歌手，请先执行抓取。"}
+    latest, artist_mid, resolved_name = found
 
     conn = connect_sqlite(latest)
     try:
@@ -193,5 +406,76 @@ def get_top_songs(
             }
             for i, r in enumerate(comment_rows)
         ],
+    }
+
+
+def get_top_songs_slice(
+    platform: str,
+    artist_name: str,
+    offset: int = 0,
+    limit: int = 10,
+    base_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    从歌手快照读取「收藏」排行的一段（分页）。limit 最大 50；多取 1 条用于判断 has_more。
+    """
+    limit_safe = min(max(1, int(limit)), 50)
+    offset_safe = max(0, int(offset))
+
+    meta = get_platform_meta(platform)
+    snapshots_dir = _resolve_snapshots_dir(platform, base_dir)
+    found = _find_latest_snapshot_for_configured_artist(
+        snapshots_dir,
+        meta["snapshot_prefix"],
+        artist_name,
+    )
+    if not found:
+        return {"ok": False, "error": "快照中未找到该歌手，请先执行抓取。"}
+    latest, artist_mid, resolved_name = found
+
+    conn = connect_sqlite(latest)
+    try:
+        _ensure_songs_mixsongid(conn)
+        has_raw_json = _songs_has_column(conn, "raw_json")
+        if has_raw_json:
+            fav_sel = "SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid, raw_json FROM songs"
+            raw_idx = 4
+        else:
+            fav_sel = "SELECT song_mid, name, COALESCE(favorite_count_text, 0) AS favorite_count_text, mixsongid FROM songs"
+            raw_idx = None
+        cur = conn.cursor()
+        rows = cur.execute(
+            fav_sel
+            + " WHERE artist_mid = ? ORDER BY favorite_count_text DESC, song_mid ASC LIMIT ? OFFSET ?",
+            (artist_mid, limit_safe + 1, offset_safe),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    has_more = len(rows) > limit_safe
+    rows = rows[:limit_safe]
+
+    out_rows = [
+        {
+            "rank": offset_safe + i + 1,
+            "song_mid": r[0],
+            "song_name": r[1] or r[0],
+            "value": int(r[2] or 0),
+            "mixsongid": _mixsongid_from_row(r, 3, raw_idx),
+        }
+        for i, r in enumerate(rows)
+    ]
+
+    return {
+        "ok": True,
+        "platform": platform,
+        "platform_name": meta.get("name", platform),
+        "artist_mid": artist_mid,
+        "artist_name": resolved_name,
+        "snapshot_name": latest.name,
+        "offset": offset_safe,
+        "limit": limit_safe,
+        "has_more": has_more,
+        "rows": out_rows,
     }
 

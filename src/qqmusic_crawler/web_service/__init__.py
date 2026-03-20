@@ -19,8 +19,14 @@ from .paths import (
     prune_old_snapshots,
     resolve_data_paths_for_debug,
 )
-from .reporting import get_report, get_report_chart_data
-from .search_top import get_top_songs, search_songs
+from .reporting import get_report, get_report_chart_data, get_reports_all_platforms
+from .search_top import (
+    get_artist_snapshot_metrics_all_platforms,
+    get_top_songs,
+    get_top_songs_slice,
+    search_songs,
+    search_songs_all_platforms,
+)
 from .toplist_ops import check_artist_toplist, get_today_toplist_from_platform_dbs
 
 __all__ = [
@@ -32,15 +38,19 @@ __all__ = [
     "get_new_song_chart_data",
     "get_new_song_current_metrics",
     "get_new_song_toplist_rows",
+    "get_artist_snapshot_metrics_all_platforms",
     "get_platform_meta",
     "get_report",
     "get_report_chart_data",
+    "get_reports_all_platforms",
     "get_today_toplist_from_platform_dbs",
     "get_top_songs",
+    "get_top_songs_slice",
     "normalize_platform",
     "prune_old_snapshots",
     "remove_milestone_outliers",
     "search_songs",
+    "search_songs_all_platforms",
     "resolve_data_paths_for_debug",
     "update_new_song_one_platform",
 ]

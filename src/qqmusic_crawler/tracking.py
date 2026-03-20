@@ -17,28 +17,19 @@ def _platform_from_changes_db(changes_db_file: Path) -> str:
     return "qq"
 
 
-def _favorite_milestone_should_log(platform: str, old_v: int, new_v: int, delta: int) -> bool:
-    """仅当「上一份有有效收藏数」且满足增量或档位时记里程碑，避免上一份为 NULL/0 被误记。"""
-    if new_v <= 0:
+def _favorite_milestone_should_log(_platform: str, old_v: int, new_v: int, _delta: int) -> bool:
+    """
+    三平台统一：仅当收藏量跨越「万」档时记录里程碑，即依次检测 10000、20000、30000…
+    条件：上一份收藏有效（>0）、当前收藏 >0，且存在整数 k>=1 使得 old_v < 10000*k <= new_v。
+    """
+    if new_v <= 0 or old_v <= 0:
         return False
-    if old_v <= 0:
-        return False  # 上一份缺收藏数（NULL/0）不记，避免误记
-    if delta > 1000:
-        return True
-    if platform == "qq":
-        # 5k, 1w, 2w, 5w, 10w, 15w, 20w, ...
-        thresholds = [5000, 10000, 20000, 50000] + [
-            50000 * k for k in range(2, max(2, new_v // 50000 + 2))
-        ]
-    else:
-        thresholds = [1000, 5000, 10000] + [
-            10000 * k for k in range(2, max(2, new_v // 10000 + 2))
-        ]
-    for t in thresholds:
-        if t > new_v:
-            break
+    step = 10_000
+    t = step
+    while t <= new_v:
         if old_v < t <= new_v:
             return True
+        t += step
     return False
 
 

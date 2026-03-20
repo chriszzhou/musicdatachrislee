@@ -7,7 +7,7 @@
     则判定 v[n] 为异常，按 method 修正
   - 可选修正快照库 songs 表；并清理 milestone_*.log 中对应异常收藏记录
 
-由 web_service.remove_milestone_outliers 调用 run()；也可命令行：
+由 web_service.remove_milestone_outliers / 定时任务 run_kugou_outlier_correction_until_clean 调用 run()；也可命令行：
 
   python -m qqmusic_crawler.metric_outlier_correction --changes-db data/kugou_changes.db
   python -m qqmusic_crawler.metric_outlier_correction --threshold 200 --dry-run

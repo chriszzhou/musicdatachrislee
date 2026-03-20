@@ -4,9 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>数据网站</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>
     :root {
+      --bg: #0f141d;
+      --card: #171f2b;
+      --border: #2a3547;
+      --text: #d7e1f0;
+      --muted: #93a4ba;
+      --primary: #5f8fd6;
+      --primary-deep: #4f7fc8;
+      --success-bg: #10261d;
+      --success-text: #63d9aa;
+      --error-bg: #341c22;
+      --error-text: #ffa2b1;
+      --table-head-bg: #1f2a3a;
+      --table-row-even: #141c28;
+      --card-soft: #121a26;
+      --shadow-soft: 0 10px 24px rgba(6, 10, 20, 0.32);
+      --chart-grid: rgba(154, 172, 191, 0.2);
+    }
+    body[data-theme="light"] {
       --bg: #f4f7ff;
       --card: #ffffff;
       --border: #e3e8f5;
@@ -18,6 +36,11 @@
       --success-text: #047857;
       --error-bg: #fef2f2;
       --error-text: #b91c1c;
+      --table-head-bg: #f3f7ff;
+      --table-row-even: #fafcff;
+      --card-soft: #fbfdff;
+      --shadow-soft: 0 8px 24px rgba(30, 70, 140, 0.08);
+      --chart-grid: rgba(148, 163, 184, 0.28);
     }
 
     * { box-sizing: border-box; }
@@ -25,42 +48,48 @@
       margin: 0;
       font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      background: radial-gradient(circle at top left, #232f42 0%, var(--bg) 34%, var(--bg) 100%);
       line-height: 1.55;
     }
-    .page { max-width: 1180px; margin: 24px auto 40px; padding: 0 16px; }
+    body[data-theme="light"] {
+      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+    }
+    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
     .header-card {
-      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+      background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px 20px;
-      box-shadow: 0 8px 24px rgba(30, 70, 140, 0.08);
+      box-shadow: var(--shadow-soft);
       margin-bottom: 14px;
+    }
+    body[data-theme="light"] .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
     }
     .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
     .subtitle { color: var(--muted); font-size: 14px; }
-    .platform-pill {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: #eef4ff;
-      border: 1px solid #dce8ff;
-      color: #1e429f;
-      font-size: 13px;
-    }
     .nav-links a { color: var(--primary); text-decoration: none; }
     .nav-links a:hover { text-decoration: underline; }
-    .platform-select {
+    .header-actions {
       margin-top: 8px;
-      margin-left: 4px;
-      padding: 4px 10px;
-      border-radius: 8px;
-      border: 1px solid #dce8ff;
-      background: #eef4ff;
-      color: #1e429f;
-      font-size: 14px;
-      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button.theme-toggle {
+      min-height: 30px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      box-shadow: none;
+      border: 1px solid var(--border);
+      background: #1f2c3f;
+      color: #d7e4fa;
+    }
+    body[data-theme="light"] button.theme-toggle {
+      background: #fff;
+      color: #334155;
     }
     .block {
       background: var(--card);
@@ -68,13 +97,13 @@
       border-radius: 14px;
       padding: 14px 14px 12px;
       margin-top: 12px;
-      box-shadow: 0 6px 18px rgba(30, 70, 140, 0.06);
+      box-shadow: var(--shadow-soft);
     }
     .block h3 {
       margin: 0 0 10px;
       font-size: 17px;
       font-weight: 650;
-      color: #20335f;
+      color: var(--text);
     }
     .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     input, select, button {
@@ -82,7 +111,7 @@
       padding: 7px 10px;
       border-radius: 10px;
       border: 1px solid #d7deef;
-      background: #fff;
+      background: var(--card);
       font-size: 14px;
       transition: all 0.2s ease;
     }
@@ -98,7 +127,7 @@
       font-weight: 600;
       padding: 8px 14px;
       cursor: pointer;
-      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+      box-shadow: 0 4px 12px rgba(79, 127, 200, 0.2);
     }
     button:hover { transform: translateY(-1px); }
     code {
@@ -128,7 +157,7 @@
       border-radius: 12px;
       overflow: hidden;
       font-size: 14px;
-      background: #fff;
+      background: var(--card);
     }
     th, td {
       border-bottom: 1px solid #edf1fb;
@@ -136,18 +165,30 @@
       text-align: left;
       vertical-align: top;
     }
+    /* 首页所有表格统一左对齐（含动态插入的榜单/里程碑表格） */
+    table th,
+    table td,
+    table.milestone-table th,
+    table.milestone-table td,
+    table.milestone-subtable th,
+    table.milestone-subtable td,
+    table.search-song-table th,
+    table.search-song-table td {
+      text-align: left !important;
+    }
     th {
-      background: #f3f7ff;
-      color: #334b86;
+      background: var(--table-head-bg);
+      color: var(--text);
       font-weight: 650;
       white-space: nowrap;
     }
     tr:last-child td { border-bottom: none; }
-    tr:nth-child(even) td { background: #fafcff; }
+    tr:nth-child(even) td { background: var(--table-row-even); }
     table td a {
       color: #2563eb;
       text-decoration: none;
     }
+    body[data-theme="dark"] table td a { color: #7ea7d9; }
     table td a:hover {
       text-decoration: underline;
     }
@@ -161,13 +202,148 @@
       border: 1px solid #e4eaf8;
       border-radius: 12px;
       padding: 10px 10px 8px;
-      background: #fbfdff;
+      background: var(--card-soft);
     }
     .chart-title {
       font-size: 14px;
       font-weight: 650;
       color: #20335f;
       margin-bottom: 8px;
+    }
+    .milestone-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 4px;
+      align-items: stretch;
+    }
+    @media (max-width: 1100px) {
+      .milestone-grid { grid-template-columns: 1fr; }
+    }
+    .milestone-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--card);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .milestone-card-head {
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 650;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .milestone-card--qq .milestone-card-head {
+      background: linear-gradient(135deg, #2f9960 0%, #25764d 100%);
+    }
+    .milestone-card--netease .milestone-card-head {
+      background: linear-gradient(135deg, #c65d66 0%, #a2474f 100%);
+    }
+    .milestone-card--kugou .milestone-card-head {
+      background: linear-gradient(135deg, #4297c9 0%, #3477a1 100%);
+    }
+    .milestone-card-body {
+      flex: 1;
+      min-height: 0;
+      max-height: min(72vh, 920px);
+      overflow-y: auto;
+      padding-bottom: 4px;
+    }
+    .milestone-song-group {
+      border: 1px solid #e4e9f4;
+      border-radius: 10px;
+      margin: 10px 10px 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
+    }
+    .milestone-song-group:last-child { margin-bottom: 10px; }
+    .milestone-song-title {
+      padding: 8px 11px;
+      font-size: 13px;
+      font-weight: 650;
+      color: #1a3052;
+      background: linear-gradient(90deg, #eef3ff 0%, #f6f9ff 100%);
+      border-bottom: 1px solid #e8ecf7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    table.milestone-table {
+      width: 100%;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      font-size: 13px;
+      box-shadow: none;
+    }
+    table.milestone-table th {
+      background: var(--table-head-bg);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    table.milestone-table tr:nth-child(even) td { background: #fafcff; }
+    table.milestone-subtable { border-top: none; }
+    table.milestone-subtable th { background: #f3f5fc; font-size: 11px; }
+    table.milestone-subtable td { font-size: 12px; }
+    .milestone-card-empty {
+      padding: 22px 14px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    button.milestone-delete-btn {
+      font-size: 12px;
+      padding: 4px 10px;
+      min-height: auto;
+      background: #f1f4fb;
+      color: #4b5f9a;
+      box-shadow: none;
+      border: 1px solid #dce3f5;
+    }
+    button.milestone-delete-btn:hover {
+      transform: none;
+      background: #fff0f0;
+      color: #b91c1c;
+      border-color: #f5cccc;
+    }
+    .topsongs-actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button.topsongs-load-more,
+    button.topsongs-collapse {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(110, 168, 255, 0.12);
+      border: 1px solid var(--border);
+      box-shadow: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .topsongs-actions button.topsongs-load-more,
+    .topsongs-actions button.topsongs-collapse {
+      flex: 1 1 180px;
+      width: auto;
+      margin-top: 0;
+    }
+    button.topsongs-load-more:hover,
+    button.topsongs-collapse:hover {
+      background: rgba(110, 168, 255, 0.2);
+      transform: none;
+    }
+    button.topsongs-load-more:disabled,
+    button.topsongs-collapse:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
     .chart-row {
       display: grid;
@@ -187,6 +363,7 @@
       color: #2563eb;
       text-decoration: none;
     }
+    body[data-theme="dark"] .chart-label a { color: #7ea7d9; }
     .chart-label a:hover {
       text-decoration: underline;
     }
@@ -215,20 +392,6 @@
     .progress-bar { width: 100%; height: 8px; background: #e8eefc; border-radius: 999px; overflow: hidden; }
     .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); transition: width 0.3s ease; }
     .btn-loading { opacity: 0.7; cursor: not-allowed; }
-    #report-chart-wrap .chart-card {
-      background: linear-gradient(145deg, #1e293b 0%, #0f172a 50%, #020617 100%);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
-    }
-    #report-chart-wrap .chart-title {
-      color: #e2e8f0;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      margin-bottom: 12px;
-    }
-    #report-chart-wrap .subtitle {
-      color: #94a3b8;
-    }
     .global-lock {
       position: fixed;
       inset: 0;
@@ -238,6 +401,140 @@
       z-index: 9999;
       cursor: progress;
     }
+    .block-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .block-head h3 {
+      margin: 0;
+      flex: 1;
+      min-width: 120px;
+    }
+    .block-head h3 a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    .block-head h3 a:hover {
+      text-decoration: underline;
+    }
+    button.block-toggle {
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      background: rgba(110, 168, 255, 0.12);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+    button.block-toggle:hover {
+      background: rgba(110, 168, 255, 0.2);
+      transform: none;
+    }
+    .block-body--collapsible:not(.is-open) {
+      display: none !important;
+    }
+    .search-song-grid {
+      margin-top: 10px;
+    }
+    .search-song-grid .milestone-card-body {
+      max-height: min(72vh, 880px);
+    }
+    table.search-song-table {
+      font-size: 13px;
+    }
+    table.search-song-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--table-head-bg);
+      box-shadow: 0 1px 0 var(--border);
+    }
+    table.search-song-table td.search-song-name {
+      max-width: 140px;
+      word-break: break-word;
+    }
+    .home-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 4px;
+      margin-bottom: 10px;
+    }
+    .home-kpi-card {
+      border: 1px solid #e4eaf8;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: linear-gradient(180deg, rgba(38, 56, 91, 0.45) 0%, rgba(19, 31, 54, 0.52) 100%);
+      min-width: 0;
+    }
+    body[data-theme="light"] .home-kpi-card {
+      background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+    }
+    .home-kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .home-kpi-value {
+      margin-top: 3px;
+      font-size: 22px;
+      font-weight: 700;
+      color: #b8c9df;
+      letter-spacing: 0.02em;
+      line-height: 1.2;
+      word-break: break-all;
+    }
+    .home-kpi-card--fans .home-kpi-value { color: #9b75cb; }
+    .home-kpi-card--favorite .home-kpi-value { color: #78a7de; }
+    .home-kpi-card--comment .home-kpi-value { color: #66b99f; }
+    body[data-theme="light"] .home-kpi-card--fans .home-kpi-value { color: #6d28d9; }
+    body[data-theme="light"] .home-kpi-card--favorite .home-kpi-value { color: #2563eb; }
+    body[data-theme="light"] .home-kpi-card--comment .home-kpi-value { color: #047857; }
+    .home-pie-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 10px;
+    }
+    @media (max-width: 1100px) {
+      .home-pie-grid { grid-template-columns: 1fr; }
+    }
+    .home-pie-card {
+      position: relative;
+      min-height: 320px;
+    }
+    .home-pie-canvas {
+      width: 100%;
+      height: 260px;
+    }
+    .topsongs-echart {
+      width: 100%;
+      height: 420px;
+    }
+    #topsongs-grid {
+      grid-template-columns: 1fr;
+    }
+    #topsongs-grid .milestone-card-body {
+      max-height: none;
+      overflow: visible;
+    }
+    .pie-chart-empty {
+      padding: 28px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 1100px) {
+      .home-kpi-grid { grid-template-columns: 1fr; }
+      .home-pie-card { min-height: 300px; }
+      .home-pie-canvas { height: 240px; }
+    }
   </style>
 </head>
 <body>
@@ -246,13 +543,10 @@
   <div class="header-card">
     <h1 class="title">数据网站</h1>
     <div class="subtitle">支持 QQ / 网易云 / 酷狗 的追踪、变化报告、榜单数据与 TOP N 查询</div>
-    <span class="nav-links" style="margin-right: 12px;"><a href="/new-song">新歌「{{ new_song_name }}」</a></span>
-    <label for="platform-select" class="subtitle">当前平台：</label>
-    <select id="platform-select" class="platform-select" aria-label="当前平台" onchange="window.location.href='/?platform='+encodeURIComponent(this.value)">
-      {% for p in platforms %}
-      <option value="{{ p }}" {% if platform == p %}selected{% endif %}>{{ platform_display_names.get(p, p) }}</option>
-      {% endfor %}
-    </select>
+    <div class="header-actions">
+      <span class="nav-links"><a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">切换为浅色</button>
+    </div>
   </div>
 
   {% if message %}
@@ -263,520 +557,363 @@
   {% endif %}
 
   <div class="block">
-    <h3>1) 歌曲搜索</h3>
-    <p class="subtitle">从当前平台最新一次快照中搜索，匹配歌曲名或专辑名包含关键词的结果</p>
-    <form method="post" action="/action/search-songs" class="row js-progress-form" data-progress-label="歌曲搜索中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" />
-      <button type="submit">搜索</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
+    <div class="block-head">
+      <h3>1) 三平台概览</h3>
     </div>
-  </div>
-
-  <div class="block">
-    <h3>2) 歌手数据变化</h3>
-    <form method="post" action="/action/report-changes" class="row js-progress-form" data-progress-label="生成变化报告中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <select id="report-mode" name="report_mode">
-        <option value="year" {% if form.get('report_mode', 'day') == 'year' %}selected{% endif %}>年</option>
-        <option value="month" {% if form.get('report_mode', 'day') == 'month' %}selected{% endif %}>月</option>
-        <option value="day" {% if form.get('report_mode', 'day') == 'day' %}selected{% endif %}>日</option>
-      </select>
-      <input type="hidden" id="report-value-hidden" name="report_value" value="{{ form.get('report_value', '') }}" />
-      <input
-        id="report-value-day"
-        type="date"
-        placeholder="请选择日期"
-        value="{% if form.get('report_mode', 'day') == 'day' %}{{ form.get('report_value', '') }}{% endif %}"
-      />
-      <input
-        id="report-value-month"
-        type="month"
-        placeholder="请选择月份"
-        value="{% if form.get('report_mode', '') == 'month' %}{{ form.get('report_value', '') }}{% endif %}"
-        style="display:none;"
-      />
-      <select id="report-value-year" style="display:none;" data-initial-year="{{ form.get('report_value', '') if form.get('report_mode', 'day') == 'year' else '' }}"></select>
-      <button type="submit">生成报告</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
-    </div>
-  </div>
-
-  <div class="block">
-    <h3>3) 歌曲TOP N</h3>
-    <form method="post" action="/action/top-songs" class="row js-progress-form" data-progress-label="查询TOP N中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="hidden" name="topsongs_artist_name" value="{{ default_topsongs_artist }}" />
-      <input type="number" name="topsongs_n" placeholder="N (默认15)" value="{{ form.get('topsongs_n', '') }}" />
-      <button type="submit">查询</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
-    </div>
-  </div>
-
-  <div class="block">
-    <h3>榜单数据</h3>
-    <p class="subtitle">仅显示今日（北京时间）上榜记录</p>
-    <div id="toplist-history-wrap">
-      <div class="progress-text js-toplist-loading">加载中...</div>
-      <div id="toplist-history-list" style="display:none;"></div>
-      <div id="toplist-history-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
-      <div id="toplist-history-err" class="err" style="display:none;"></div>
-    </div>
-  </div>
-
-  <div class="block">
-    <h3>里程碑</h3>
-    <p class="subtitle">收藏量节点记录（增量&gt;1000 或首次突破阈值时写入），按时间倒序</p>
-    <p class="subtitle" style="margin-top: 4px;">
-      <label>平台：</label>
-      <select id="milestone-outlier-platform">
-        <option value="qq">QQ音乐</option>
-        <option value="netease">网易云音乐</option>
-        <option value="kugou" selected>酷狗音乐</option>
-      </select>
-      <button type="button" id="milestone-remove-outliers-btn" class="btn">剔除异常数据</button>
-      <span id="milestone-outlier-msg" class="subtitle" style="margin-left: 8px;"></span>
-    </p>
-    <div id="milestone-log-wrap">
-      <div class="progress-text js-milestone-loading">加载中...</div>
-      <table id="milestone-log-table" style="display:none; margin-top: 8px;">
-        <thead>
-          <tr>
-            <th>时间</th>
-            <th>平台</th>
-            <th>歌曲名</th>
-            <th>收藏量</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="milestone-log-tbody"></tbody>
-      </table>
-      <div id="milestone-log-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
-      <div id="milestone-log-err" class="err" style="display:none;"></div>
-    </div>
-  </div>
-
-  {% if result_type == "search-songs" %}
-  <div class="block">
-    <h3>歌曲搜索结果</h3>
-    {% if result.get("ok") %}
-      <div class="subtitle">快照：{{ result.get("snapshot_name", "") }}，关键词「{{ result.get("keyword", "") }}」</div>
-      {% if result.get("rows") %}
-      <table>
-        <thead>
-          <tr>
-            <th>歌曲名</th>
-            <th>专辑名</th>
-            <th>评论量</th>
-            <th>收藏量</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in result.get("rows", []) %}
-          <tr>
-            <td>{% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
-            <td>{{ row.get("album_name") }}</td>
-            <td>{{ row.get("comment_count") }}</td>
-            <td>{{ row.get("favorite_count") }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div>未匹配到歌曲。</div>
-      {% endif %}
-    {% else %}
-      <div class="err">{{ result.get("error", "搜索失败") }}</div>
+    {% if not home_artist_metrics.get('ok') %}
+    <div class="err" style="margin-top:8px;">{{ home_artist_metrics.get('error', '概览数据不可用') }}</div>
     {% endif %}
+    {% set _bp = home_artist_metrics.get('by_platform', {}) %}
+    {% for plat in platforms %}
+      {% set p = _bp.get(plat, {}) %}
+      {% if p and not p.get('ok') %}
+      <p class="subtitle" style="margin-top:6px; font-size:12px;">{{ platform_display_names.get(plat, plat) }}：{{ p.get('error', '—') }}</p>
+      {% endif %}
+    {% endfor %}
+    <script type="application/json" id="home-metrics-json">{{ home_artist_metrics_json|safe }}</script>
+    <div class="home-kpi-grid">
+      <div class="home-kpi-card home-kpi-card--fans">
+        <div class="home-kpi-label">总粉丝数</div>
+        <div class="home-kpi-value" id="home-kpi-fans">-</div>
+      </div>
+      <div class="home-kpi-card home-kpi-card--favorite">
+        <div class="home-kpi-label">总收藏数</div>
+        <div class="home-kpi-value" id="home-kpi-favorite">-</div>
+      </div>
+      <div class="home-kpi-card home-kpi-card--comment">
+        <div class="home-kpi-label">总评论数</div>
+        <div class="home-kpi-value" id="home-kpi-comment">-</div>
+      </div>
+    </div>
+    <div class="home-pie-grid">
+      <div class="home-pie-card chart-card">
+        <div class="chart-title">粉丝数占比</div>
+        <div class="pie-chart-empty" id="home-pie-empty-fans" style="display:none;">暂无数据（各平台均为 0 或无法读取）</div>
+        <div class="home-pie-canvas" id="home-pie-fans"></div>
+      </div>
+      <div class="home-pie-card chart-card">
+        <div class="chart-title">收藏合计占比</div>
+        <div class="pie-chart-empty" id="home-pie-empty-favorite" style="display:none;">暂无数据（各平台均为 0 或无法读取）</div>
+        <div class="home-pie-canvas" id="home-pie-favorite"></div>
+      </div>
+      <div class="home-pie-card chart-card">
+        <div class="chart-title">评论合计占比</div>
+        <div class="pie-chart-empty" id="home-pie-empty-comment" style="display:none;">暂无数据（各平台均为 0 或无法读取）</div>
+        <div class="home-pie-canvas" id="home-pie-comment"></div>
+      </div>
+    </div>
   </div>
-  {% endif %}
 
-  {% if result_type == "report-changes" %}
   <div class="block">
-    <h3>变化报告</h3>
-    {% if result.get("ok") %}
-      <div class="chart-card">
-        <div class="chart-title">评论增长</div>
-      {% if result.get("comment_chart_rows") %}
-      {% set comment_rows = result.get("comment_chart_rows", []) %}
-      {% set comment_max_abs = (comment_rows | map(attribute='delta_abs') | max) %}
-      {% for row in comment_rows %}
-      {% set width = ((row.get("delta_abs") or 0) * 100 / (comment_max_abs or 1)) %}
-      <div class="chart-row">
-        <div class="chart-label">{{ row.get("name") }}</div>
-        <div class="chart-track">
-          <div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div>
-        </div>
-        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -> {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div>无</div>
-      {% endif %}
+    <div class="block-head">
+      <h3>2) 歌曲搜索</h3>
+    </div>
+    <div id="block-search-body">
+      <p class="subtitle">在三平台（QQ / 网易云 / 酷狗）各自<strong>最新一次快照</strong>中搜索，歌曲名或专辑名包含关键词即匹配；每平台最多展示 <strong>5</strong> 条。</p>
+      <form method="post" action="/action/search-songs" class="row js-progress-form" data-progress-label="歌曲搜索中">
+        <input type="hidden" name="platform" value="{{ platform }}" />
+        <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" />
+        <button type="submit">搜索</button>
+      </form>
+      <div class="progress-wrap js-progress-wrap">
+        <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
+        <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
       </div>
 
-      <div class="chart-card">
-        <div class="chart-title">收藏增长</div>
-      {% if result.get("favorite_chart_rows") %}
-      {% set favorite_rows = result.get("favorite_chart_rows", []) %}
-      {% set favorite_max_abs = (favorite_rows | map(attribute='delta_abs') | max) %}
-      {% for row in favorite_rows %}
-      {% set width = ((row.get("delta_abs") or 0) * 100 / (favorite_max_abs or 1)) %}
-      <div class="chart-row">
-        <div class="chart-label">{{ row.get("name") }}</div>
-        <div class="chart-track">
-          <div class="chart-fill chart-fill-fav" style="width: {{ '%.2f'|format(width) }}%;"></div>
-        </div>
-        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -> {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div>无</div>
-      {% endif %}
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title">粉丝增长</div>
-      {% if result.get("artist_chart_rows") %}
-      {% set artist_rows = result.get("artist_chart_rows", []) %}
-      {% set artist_max_abs = (artist_rows | map(attribute='delta_abs') | max) %}
-      {% for row in artist_rows %}
-      {% set width = ((row.get("delta_abs") or 0) * 100 / (artist_max_abs or 1)) %}
-      <div class="chart-row">
-        <div class="chart-label">{{ row.get("name") }}</div>
-        <div class="chart-track">
-          <div class="chart-fill chart-fill-fans" style="width: {{ '%.2f'|format(width) }}%;"></div>
-        </div>
-        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -> {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div>无</div>
-      {% endif %}
-      </div>
-
-      <div class="row" style="margin-top: 12px;">
-        <button type="button" id="btn-report-chart" class="js-btn-report-chart"
-          data-platform="{{ platform }}"
-          data-report-mode="{{ form.get('report_mode', 'day') }}"
-          data-report-value="{{ form.get('report_value', '') }}"
-          data-report-artist-mid="{{ form.get('report_artist_mid', '') }}"
-          onclick="typeof window.showReportChart === 'function' && window.showReportChart(this);"
-        >变化折线图</button>
-      </div>
-      <div id="report-chart-wrap" style="display:none; margin-top: 14px;">
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">变化趋势（评论 / 收藏 / 粉丝 增量）</div>
-          <div id="report-chart-no-data" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
-          <canvas id="report-chart-canvas" height="260"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">收藏折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-favorite" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-favorite" height="240"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">评论折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-comment" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-comment" height="240"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">粉丝折线图</div>
-          <div id="report-chart-no-data-fans" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-fans" height="240"></canvas>
-        </div>
-      </div>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  {% if result_type == "top-songs" %}
-  <div class="block">
-    <h3>歌曲TOP N 结果</h3>
-    {% if result.get("ok") %}
-      {% if result.get("favorites") %}
-      {% set favorites = result.get("favorites", []) %}
-      {% set max_fav = (favorites | map(attribute='value') | max) %}
-      <div class="chart-card">
-        <div class="chart-title">收藏 TOP</div>
-        {% for row in favorites %}
-        {% set width = ((row.get("value") or 0) * 100 / (max_fav or 1)) %}
-        <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</div>
-          <div class="chart-track"><div class="chart-fill chart-fill-fav" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
-          <div class="chart-value">{{ row.get("value") }}</div>
+      {% if result_type == "search-songs" %}
+      {% if result.get("ok") %}
+      <p class="subtitle" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,0.25);">关键词「{{ result.get("keyword", "") }}」</p>
+      <div class="milestone-grid search-song-grid">
+        {% for plat in platforms %}
+        {% set pdata = result.get("by_platform", {}).get(plat, {}) %}
+        <div class="milestone-card milestone-card--{{ plat }}">
+          <div class="milestone-card-head">{{ platform_display_names.get(plat, plat) }}</div>
+          <div class="milestone-card-body">
+            {% if pdata.get("ok") %}
+              {% if pdata.get("rows") %}
+              <table class="milestone-table search-song-table">
+                <thead>
+                  <tr>
+                    <th>歌曲名</th>
+                    <th>专辑</th>
+                    <th>评论</th>
+                    <th>收藏</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in pdata.get("rows", []) %}
+                  <tr>
+                    <td class="search-song-name">{% if plat == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif plat == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
+                    <td>{{ row.get("album_name") }}</td>
+                    <td>{{ row.get("comment_count") }}</td>
+                    <td>{{ row.get("favorite_count") }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <div class="milestone-card-empty">未匹配到歌曲</div>
+              {% endif %}
+            {% else %}
+              <div class="milestone-card-empty">{{ pdata.get("error", "该平台搜索失败") }}</div>
+            {% endif %}
+          </div>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <div>无</div>
+      <div class="err" style="margin-top: 14px;">{{ result.get("error", "搜索失败") }}</div>
       {% endif %}
-
-      {% if result.get("comments") %}
-      {% set comments = result.get("comments", []) %}
-      {% set max_comment = (comments | map(attribute='value') | max) %}
-      <div class="chart-card">
-        <div class="chart-title">评论 TOP</div>
-        {% for row in comments %}
-        {% set width = ((row.get("value") or 0) * 100 / (max_comment or 1)) %}
-        <div class="chart-row">
-          <div class="chart-label">{{ row.get("rank") }}. {% if platform == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif platform == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</div>
-          <div class="chart-track"><div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div></div>
-          <div class="chart-value">{{ row.get("value") }}</div>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div>无</div>
       {% endif %}
-    {% endif %}
+    </div>
   </div>
-  {% endif %}
+
+  <div class="block">
+    <div class="block-head">
+      <h3>3) <a href="/changereport">歌手数据变化</a></h3>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h3>4) 歌曲 TOP10</h3>
+      <button type="button" class="block-toggle" data-target="block-topsongs-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-topsongs-body" class="block-body--collapsible">
+      <div id="topsongs-wrap" data-artist="{{ default_topsongs_artist }}">
+        <div class="progress-text js-topsongs-loading">加载中...</div>
+        <div id="topsongs-grid" class="milestone-grid" style="display:none;"></div>
+        <div id="topsongs-err" class="err" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h3>5) 榜单数据</h3>
+      <button type="button" class="block-toggle" data-target="block-toplist-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-toplist-body" class="block-body--collapsible">
+      <div id="toplist-history-wrap">
+        <div class="progress-text js-toplist-loading">加载中...</div>
+        <div id="toplist-history-list" class="milestone-grid" style="display:none;"></div>
+        <div id="toplist-history-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
+        <div id="toplist-history-err" class="err" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h3>6) 里程碑</h3>
+      <button type="button" class="block-toggle" data-target="block-milestone-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-milestone-body" class="block-body--collapsible">
+      <div id="milestone-log-wrap">
+        <div class="progress-text js-milestone-loading">加载中...</div>
+        <div id="milestone-grid" class="milestone-grid" style="display:none;"></div>
+        <div id="milestone-log-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
+        <div id="milestone-log-err" class="err" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function () {
+      var topsongsInited = false;
+
+      function bindBlockToggles() {
+        document.querySelectorAll(".block-toggle").forEach(function (btn) {
+          if (btn.dataset.bound) return;
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", function () {
+            var id = btn.getAttribute("data-target");
+            var body = document.getElementById(id);
+            if (!body) return;
+            var open = body.classList.contains("is-open");
+            if (open) {
+              body.classList.remove("is-open");
+              btn.textContent = "显示";
+              btn.setAttribute("aria-expanded", "false");
+            } else {
+              body.classList.add("is-open");
+              btn.textContent = "隐藏";
+              btn.setAttribute("aria-expanded", "true");
+              if (id === "block-topsongs-body" && !topsongsInited) {
+                loadTopSongsInit();
+                topsongsInited = true;
+              }
+              setTimeout(function () {
+                resizeAllEcharts();
+                if (id === "block-topsongs-body") {
+                  renderAllTopSongsCharts();
+                }
+              }, 80);
+            }
+          });
+        });
+      }
+      bindBlockToggles();
+
+      var allEchartInstances = [];
+      var topsongsChartState = {};
+      var topsongsVisibleCount = {};
+      var topsongsHasMore = {};
+
+      function registerEchart(ins) {
+        if (!ins) return;
+        allEchartInstances.push(ins);
+      }
+      function resizeAllEcharts() {
+        allEchartInstances.forEach(function (ins) {
+          try { ins.resize(); } catch (e) {}
+        });
+      }
+      window.addEventListener("resize", resizeAllEcharts);
+
+      function getTheme() {
+        return document.body.getAttribute("data-theme") || "dark";
+      }
+      function applyTheme(theme) {
+        var t = theme === "light" ? "light" : "dark";
+        document.body.setAttribute("data-theme", t);
+        var btn = document.getElementById("theme-toggle");
+        if (btn) btn.textContent = t === "dark" ? "切换为浅色" : "切换为深色";
+        try { localStorage.setItem("qqmc_theme", t); } catch (e) {}
+      }
+      function initThemeToggle() {
+        var saved = "";
+        try { saved = localStorage.getItem("qqmc_theme") || ""; } catch (e) {}
+        applyTheme(saved === "light" ? "light" : "dark");
+        var btn = document.getElementById("theme-toggle");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+          applyTheme(getTheme() === "dark" ? "light" : "dark");
+          initHomePies();
+          renderAllTopSongsCharts();
+        });
+      }
+      initThemeToggle();
+
+      function sumArr(arr) {
+        return arr.reduce(function (s, x) { return s + (Number(x) || 0); }, 0);
+      }
+      function numberFmt(v) {
+        var n = Number(v) || 0;
+        return n.toLocaleString("zh-CN");
+      }
+      function getThemePalette() {
+        var dark = getTheme() === "dark";
+        return {
+          text: dark ? "#d7e1f0" : "#334155",
+          muted: dark ? "#94a9cf" : "#64748b",
+          grid: dark ? "rgba(148,169,207,0.18)" : "rgba(148,163,184,0.28)",
+          border: dark ? "#22314f" : "#d9e3f9",
+          shadow: dark ? "rgba(0,0,0,0.28)" : "rgba(30,70,140,0.08)",
+          barStart: dark ? "#7ba4d8" : "#60a5fa",
+          barEnd: dark ? "#5e83bb" : "#2563eb"
+        };
+      }
+      function initHomePies() {
+        var el = document.getElementById("home-metrics-json");
+        if (!el || typeof echarts === "undefined") return;
+        var raw = (el.textContent || "").trim();
+        if (!raw) return;
+        var m;
+        try { m = JSON.parse(raw); } catch (e) { return; }
+        var by = m.by_platform || {};
+        var order = ["qq", "netease", "kugou"];
+        var labels = order.map(function (p) {
+          var row = by[p];
+          return row && row.platform_name ? row.platform_name : p;
+        });
+        var palette = getThemePalette();
+        var fans = order.map(function (p) {
+          var row = by[p];
+          return row && row.fans != null ? Number(row.fans) : 0;
+        });
+        var favs = order.map(function (p) {
+          var row = by[p];
+          return row && row.favorite_sum != null ? Number(row.favorite_sum) : 0;
+        });
+        var coms = order.map(function (p) {
+          var row = by[p];
+          return row && row.comment_sum != null ? Number(row.comment_sum) : 0;
+        });
+        var colors = getTheme() === "dark"
+          ? ["#5ba276", "#bc7075", "#5a98bf"]
+          : ["#22b35c", "#e85a5a", "#1ab0ff"];
+        var kpiFans = document.getElementById("home-kpi-fans");
+        var kpiFav = document.getElementById("home-kpi-favorite");
+        var kpiCom = document.getElementById("home-kpi-comment");
+        if (kpiFans) kpiFans.textContent = numberFmt(sumArr(fans));
+        if (kpiFav) kpiFav.textContent = numberFmt(sumArr(favs));
+        if (kpiCom) kpiCom.textContent = numberFmt(sumArr(coms));
+
+        function buildSeriesData(values) {
+          return values.map(function (v, idx) {
+            return { value: Number(v) || 0, name: labels[idx] };
+          });
+        }
+        function setupPie(canvasId, emptyId, values) {
+          var canvas = document.getElementById(canvasId);
+          var emptyEl = document.getElementById(emptyId);
+          if (!canvas || !emptyEl) return;
+          if (sumArr(values) <= 0) {
+            canvas.style.display = "none";
+            emptyEl.style.display = "block";
+            return;
+          }
+          canvas.style.display = "block";
+          emptyEl.style.display = "none";
+          if (canvas.__echarts_instance__) {
+            try { echarts.dispose(canvas); } catch (e) {}
+          }
+          var chart = echarts.init(canvas);
+          chart.setOption({
+            color: colors,
+            animationDuration: 900,
+            animationEasing: "cubicOut",
+            tooltip: {
+              trigger: "item",
+              formatter: function (params) {
+                var val = Number(params.value) || 0;
+                return params.name + "<br/>" + numberFmt(val) + "（" + params.percent + "%）";
+              }
+            },
+            legend: {
+              type: "plain",
+              bottom: 0,
+              left: "center",
+              textStyle: { color: palette.text, fontSize: 12 }
+            },
+            series: [{
+              type: "pie",
+              radius: ["40%", "74%"],
+              center: ["50%", "44%"],
+              avoidLabelOverlap: true,
+              label: {
+                formatter: function (params) {
+                  return params.percent >= 8 ? params.percent + "%" : "";
+                },
+                color: palette.text,
+                fontSize: 11
+              },
+              labelLine: { length: 10, length2: 8 },
+              itemStyle: { borderColor: getTheme() === "dark" ? "#1b2534" : "#fff", borderWidth: 2 },
+              data: buildSeriesData(values)
+            }]
+          });
+          registerEchart(chart);
+        }
+        setupPie("home-pie-fans", "home-pie-empty-fans", fans);
+        setupPie("home-pie-favorite", "home-pie-empty-favorite", favs);
+        setupPie("home-pie-comment", "home-pie-empty-comment", coms);
+      }
+      initHomePies();
+
       var isSubmitting = false;
       var lock = document.getElementById("global-lock");
-      var reportChartInstances = [];
-
-      function destroyReportCharts() {
-        reportChartInstances.forEach(function (inst) {
-          if (inst && typeof inst.destroy === "function") inst.destroy();
-        });
-        reportChartInstances = [];
-      }
-
-      function formatChartLabels(labels, reportMode) {
-        var isDay = reportMode === "day";
-        return (labels || []).map(function (l) {
-          if (isDay && l.length > 10) return l.substring(11, 19);
-          return l;
-        });
-      }
-
-      var CHART_COLORS = [
-        "rgba(96, 165, 250, 1)", "rgba(52, 211, 153, 1)", "rgba(167, 139, 250, 1)", "rgba(248, 113, 113, 1)", "rgba(251, 191, 36, 1)",
-        "rgba(34, 211, 238, 1)", "rgba(244, 114, 182, 1)", "rgba(129, 140, 248, 1)", "rgba(45, 212, 191, 1)", "rgba(134, 239, 172, 1)"
-      ];
-      function chartGradient(r, g, b) {
-        return function (context) {
-          var chart = context.chart;
-          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
-          if (hi != null && context.datasetIndex !== hi) {
-            return "rgba(148, 163, 184, 0.06)";
-          }
-          var ctx = chart.ctx;
-          var area = chart.chartArea;
-          if (!area) return "transparent";
-          var gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
-          gradient.addColorStop(0, "rgba(" + r + "," + g + "," + b + ",0.4)");
-          gradient.addColorStop(0.5, "rgba(" + r + "," + g + "," + b + ",0.12)");
-          gradient.addColorStop(1, "rgba(" + r + "," + g + "," + b + ",0)");
-          return gradient;
-        };
-      }
-      function borderColorFn(fullColor) {
-        return function (context) {
-          var chart = context.chart;
-          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
-          if (hi == null) return fullColor;
-          return context.datasetIndex === hi ? fullColor : "rgba(148, 163, 184, 0.28)";
-        };
-      }
-      var highlightDataLabelsPlugin = {
-        id: "highlightDataLabels",
-        afterDatasetsDraw: function (chart) {
-          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
-          if (hi == null || hi < 0 || !chart.data.datasets[hi]) return;
-          var ctx = chart.ctx;
-          var meta = chart.getDatasetMeta(hi);
-          var data = chart.data.datasets[hi].data || [];
-          if (!meta.data || meta.data.length === 0) return;
-          ctx.save();
-          ctx.font = "bold 11px \"PingFang SC\", \"Microsoft YaHei\", sans-serif";
-          ctx.fillStyle = "#e2e8f0";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "bottom";
-          for (var i = 0; i < meta.data.length; i++) {
-            var point = meta.data[i];
-            var val = data[i];
-            if (point && typeof val === "number") {
-              ctx.fillText(String(val), point.x, point.y - 6);
-            }
-          }
-          ctx.restore();
-        }
-      };
-      if (typeof Chart !== "undefined") {
-        Chart.register(highlightDataLabelsPlugin);
-      }
-      var CHART_RGB = [
-        [96, 165, 250], [52, 211, 153], [167, 139, 250], [248, 113, 113], [251, 191, 36],
-        [34, 211, 238], [244, 114, 182], [129, 140, 248], [45, 212, 191], [134, 239, 172]
-      ];
-
-      window.showReportChart = function (btn) {
-        if (!btn) return;
-        var platform = btn.getAttribute("data-platform") || "qq";
-        var reportMode = btn.getAttribute("data-report-mode") || "year";
-        var reportValue = (btn.getAttribute("data-report-value") || "").trim();
-        var reportArtistMid = (btn.getAttribute("data-report-artist-mid") || "").trim();
-        if (!reportValue) {
-          alert("请先选择年/月/日并生成报告后再查看折线图。");
-          return;
-        }
-        var wrap = document.getElementById("report-chart-wrap");
-        var canvas = document.getElementById("report-chart-canvas");
-        if (!wrap || !canvas) {
-          alert("页面元素未就绪，请刷新后重试。");
-          return;
-        }
-        wrap.style.display = "block";
-        destroyReportCharts();
-        var noDataEl = document.getElementById("report-chart-no-data");
-        var noDataFav = document.getElementById("report-chart-no-data-favorite");
-        var noDataComment = document.getElementById("report-chart-no-data-comment");
-        var noDataFans = document.getElementById("report-chart-no-data-fans");
-        [noDataEl, noDataFav, noDataComment, noDataFans].forEach(function (el) {
-          if (el) el.style.display = "none";
-        });
-        var url = "/api/report-chart?platform=" + encodeURIComponent(platform) +
-          "&report_mode=" + encodeURIComponent(reportMode) +
-          "&report_value=" + encodeURIComponent(reportValue);
-        if (reportArtistMid) {
-          url += "&report_artist_mid=" + encodeURIComponent(reportArtistMid);
-        }
-        fetch(url)
-          .then(function (r) {
-            if (!r.ok) {
-              return r.text().then(function (text) {
-                var msg = "请求失败 " + r.status;
-                try {
-                  var j = JSON.parse(text);
-                  if (j && j.error) msg = j.error;
-                  else if (j && j.detail) msg = Array.isArray(j.detail) ? j.detail.map(function (d) { return d.msg || (d.loc && d.loc.join("")); }).join(" ") : String(j.detail);
-                } catch (e) {}
-                throw new Error(msg);
-              });
-            }
-            return r.json();
-          })
-          .then(function (data) {
-            if (!data.ok) {
-              alert(data.error || "获取折线图数据失败");
-              return;
-            }
-            var labels = data.labels || [];
-            var isDay = reportMode === "day";
-            var displayLabels = formatChartLabels(labels, reportMode);
-            var chartOpts = {
-              responsive: true,
-              maintainAspectRatio: true,
-              animation: { duration: 800 },
-              plugins: {
-                highlightIndex: null,
-                legend: {
-                  position: "top",
-                  onClick: function (e, legendItem, legend) {
-                    var ch = legend.chart;
-                    var idx = legendItem.datasetIndex;
-                    var hi = ch.options.plugins.highlightIndex;
-                    ch.options.plugins.highlightIndex = (hi === idx ? null : idx);
-                    ch.update();
-                  },
-                  labels: {
-                    color: function (ctx) {
-                      var ch = ctx.chart;
-                      var hi = ch.options.plugins && ch.options.plugins.highlightIndex;
-                      if (hi == null || ctx.datasetIndex === undefined) return "#94a3b8";
-                      return ctx.datasetIndex === hi ? "#f1f5f9" : "rgba(148, 163, 184, 0.5)";
-                    },
-                    font: { size: 12, weight: "600" },
-                    padding: 16,
-                    usePointStyle: true,
-                    pointStyle: "circle"
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  grid: { color: "rgba(148, 163, 184, 0.12)", drawTicks: true },
-                  ticks: { color: "#94a3b8", maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } }
-                },
-                y: {
-                  grid: { color: "rgba(148, 163, 184, 0.12)" },
-                  ticks: { color: "#94a3b8", font: { size: 11 } },
-                  beginAtZero: true
-                }
-              }
-            };
-            var lineStyle = { borderWidth: 2.5, tension: 0.4, fill: true, pointRadius: 2.5, pointHoverRadius: 6, pointBackgroundColor: "#0f172a", pointBorderWidth: 1 };
-            if (typeof Chart === "undefined") {
-              alert("图表库未加载，请检查网络或刷新页面。");
-              return;
-            }
-
-            if (labels.length === 0) {
-              if (noDataEl) noDataEl.style.display = "block";
-              return;
-            }
-
-            var series = data.series || {};
-            reportChartInstances.push(new Chart(canvas, {
-              type: "line",
-              data: {
-                labels: displayLabels,
-                datasets: [
-                  Object.assign({ label: "评论增量", data: series.comment || [], borderColor: borderColorFn("#34d399"), backgroundColor: chartGradient(52, 211, 153) }, lineStyle),
-                  Object.assign({ label: "收藏增量", data: series.favorite || [], borderColor: borderColorFn("#60a5fa"), backgroundColor: chartGradient(96, 165, 250) }, lineStyle),
-                  Object.assign({ label: "粉丝增量", data: series.fans || [], borderColor: borderColorFn("#a78bfa"), backgroundColor: chartGradient(167, 139, 250) }, lineStyle)
-                ]
-              },
-              options: chartOpts
-            }));
-
-            function drawSubChart(canvasId, noDataId, payload, title) {
-              var c = document.getElementById(canvasId);
-              var nd = document.getElementById(noDataId);
-              if (!c) return;
-              if (!payload || !payload.datasets || payload.datasets.length === 0) {
-                if (nd) nd.style.display = "block";
-                return;
-              }
-              var datasets = payload.datasets.map(function (d, i) {
-                var rgb = CHART_RGB[i % CHART_RGB.length];
-                var color = CHART_COLORS[i % CHART_COLORS.length];
-                return Object.assign({
-                  label: d.name,
-                  data: d.data || [],
-                  borderColor: borderColorFn(color),
-                  backgroundColor: chartGradient(rgb[0], rgb[1], rgb[2])
-                }, lineStyle);
-              });
-              reportChartInstances.push(new Chart(c, {
-                type: "line",
-                data: { labels: formatChartLabels(payload.labels, reportMode), datasets: datasets },
-                options: chartOpts
-              }));
-            }
-
-            drawSubChart("report-chart-canvas-favorite", "report-chart-no-data-favorite", data.song_favorite || {}, "收藏");
-            drawSubChart("report-chart-canvas-comment", "report-chart-no-data-comment", data.song_comment || {}, "评论");
-            drawSubChart("report-chart-canvas-fans", "report-chart-no-data-fans", data.song_fans || {}, "粉丝");
-          })
-          .catch(function (err) {
-            alert(err && err.message ? err.message : "请求折线图数据失败");
-          });
-      };
-
       function setGlobalSubmitting(flag) {
         isSubmitting = flag;
         if (lock) {
@@ -841,92 +978,31 @@
         });
       });
 
-      (function initReportDateInput() {
-        var modeEl = document.getElementById("report-mode");
-        var hiddenEl = document.getElementById("report-value-hidden");
-        var dayEl = document.getElementById("report-value-day");
-        var monthEl = document.getElementById("report-value-month");
-        var yearEl = document.getElementById("report-value-year");
-        if (!modeEl || !hiddenEl || !dayEl || !monthEl || !yearEl) return;
-
-        function buildYearOptions(now) {
-          var nowYear = now.getFullYear();
-          var start = nowYear - 15;
-          var end = nowYear + 1;
-          var initial = (yearEl.getAttribute("data-initial-year") || "").trim();
-          yearEl.innerHTML = "";
-          for (var y = end; y >= start; y--) {
-            var op = document.createElement("option");
-            op.value = String(y);
-            op.textContent = String(y);
-            yearEl.appendChild(op);
-          }
-          if (initial && /^\d{4}$/.test(initial)) {
-            yearEl.value = initial;
-          } else {
-            yearEl.value = String(nowYear);
-          }
-        }
-
-        function syncInputByMode() {
-          var now = new Date();
-          var yyyy = String(now.getFullYear());
-          var mm = String(now.getMonth() + 1).padStart(2, "0");
-          var dd = String(now.getDate()).padStart(2, "0");
-          var today = yyyy + "-" + mm + "-" + dd;
-          var thisMonth = yyyy + "-" + mm;
-
-          var mode = modeEl.value;
-          if (mode === "day") {
-            dayEl.style.display = "";
-            monthEl.style.display = "none";
-            yearEl.style.display = "none";
-            if (!dayEl.value) {
-              dayEl.value = today;
-            }
-            hiddenEl.value = dayEl.value || "";
-          } else if (mode === "month") {
-            dayEl.style.display = "none";
-            monthEl.style.display = "";
-            yearEl.style.display = "none";
-            if (!monthEl.value) {
-              monthEl.value = thisMonth;
-            }
-            hiddenEl.value = monthEl.value || "";
-          } else {
-            dayEl.style.display = "none";
-            monthEl.style.display = "none";
-            yearEl.style.display = "";
-            if (!yearEl.value) {
-              yearEl.value = yyyy;
-            }
-            hiddenEl.value = yearEl.value || "";
-          }
-        }
-
-        dayEl.addEventListener("change", function () {
-          if (modeEl.value === "day") {
-            hiddenEl.value = dayEl.value || "";
-          }
+      /** 同一平台内按歌曲分组；组内先按榜单名再按排名 */
+      function groupToplistBySong(rows) {
+        var map = {};
+        rows.forEach(function (r) {
+          var k = r.song_name != null && String(r.song_name).trim() !== "" ? String(r.song_name) : "\u0000";
+          if (!map[k]) map[k] = [];
+          map[k].push(r);
         });
-        monthEl.addEventListener("change", function () {
-          if (modeEl.value === "month") {
-            hiddenEl.value = monthEl.value || "";
-          }
+        var keys = Object.keys(map);
+        keys.sort(function (a, b) {
+          if (a === "\u0000") return 1;
+          if (b === "\u0000") return -1;
+          return a.localeCompare(b, "zh-CN");
         });
-        yearEl.addEventListener("change", function () {
-          if (modeEl.value === "year") {
-            hiddenEl.value = yearEl.value || "";
-          }
+        return keys.map(function (k) {
+          var list = map[k].slice().sort(function (x, y) {
+            var na = String(x.top_name || ""), nb = String(y.top_name || "");
+            var c = na.localeCompare(nb, "zh-CN");
+            if (c !== 0) return c;
+            return (parseInt(x.rank, 10) || 999999) - (parseInt(y.rank, 10) || 999999);
+          });
+          var songTitle = k === "\u0000" ? "-" : k;
+          return { songTitle: songTitle, entries: list };
         });
-
-        if (!modeEl.value) {
-          modeEl.value = "day";
-        }
-        buildYearOptions(new Date());
-        modeEl.addEventListener("change", syncInputByMode);
-        syncInputByMode();
-      })();
+      }
 
       function loadToplistHistory(showLoading) {
         var loading = document.querySelector(".js-toplist-loading");
@@ -947,42 +1023,55 @@
               if (errEl) { errEl.textContent = data.error || "加载失败"; errEl.style.display = "block"; }
               return;
             }
+            function esc(s) {
+              return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+            }
             var runs = data.runs;
             if (runs.length === 0) {
               if (empty) empty.style.display = "block";
               return;
             }
-            function esc(s) {
-              return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-            }
+            var run = runs[0];
+            var resultsByPlatform = {};
+            (run.results || []).forEach(function (res) {
+              resultsByPlatform[res.platform] = res;
+            });
+            var order = [
+              { key: "qq", cls: "milestone-card--qq", title: "QQ音乐" },
+              { key: "netease", cls: "milestone-card--netease", title: "网易云音乐" },
+              { key: "kugou", cls: "milestone-card--kugou", title: "酷狗音乐" }
+            ];
             var html = "";
-            runs.forEach(function (run) {
-              var hasAny = (run.results || []).some(function (res) { return res.rows && res.rows.length > 0; });
-              if (!hasAny) return;
-              html += "<div class=\"toplist-run-block\" style=\"margin-bottom: 24px;\">";
-              html += "<div class=\"subtitle\" style=\"margin-bottom: 6px;\">" + esc(run.run_at) + " 北京时间</div>";
-              html += "<table class=\"toplist-unified-table\"><thead><tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th><th>日期</th></tr></thead><tbody>";
-              (run.results || []).forEach(function (res) {
-                if (!res.rows || res.rows.length === 0) return;
-                var platformName = esc(res.platform_name || res.platform || "");
-                res.rows.forEach(function (row) {
-                  var topName = esc(row.top_name || row.top_id || "-");
-                  var rank = row.rank != null ? row.rank : "-";
-                  var songName = esc(row.song_name || "-");
-                  var dateStr = (row.last_seen_at || row.top_update_time || "").toString().trim();
-                  if (dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
-                  if (!dateStr) dateStr = "-";
-                  html += "<tr><td>" + platformName + "</td><td>" + topName + "</td><td>#" + rank + "</td><td>" + songName + "</td><td>" + esc(dateStr) + "</td></tr>";
+            order.forEach(function (p) {
+              var res = resultsByPlatform[p.key];
+              html += "<div class=\"milestone-card " + p.cls + "\">";
+              html += "<div class=\"milestone-card-head\">" + esc(p.title) + "</div>";
+              html += "<div class=\"milestone-card-body\">";
+              if (!res) {
+                html += "<div class=\"milestone-card-empty\">暂无记录</div>";
+              } else if (res.ok === false && res.error) {
+                html += "<div class=\"milestone-card-empty\">" + esc(res.error) + "</div>";
+              } else if (!res.rows || !res.rows.length) {
+                html += "<div class=\"milestone-card-empty\">暂无记录</div>";
+              } else {
+                groupToplistBySong(res.rows).forEach(function (g) {
+                  html += "<div class=\"milestone-song-group\">";
+                  html += "<div class=\"milestone-song-title\" title=\"" + esc(g.songTitle) + "\">" + esc(g.songTitle) + "</div>";
+                  html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>榜单</th><th>排名</th></tr></thead><tbody>";
+                  g.entries.forEach(function (row) {
+                    var rank = row.rank != null ? row.rank : "-";
+                    var tn = (row.top_name || "-").trim() || "-";
+                    var period = (row.top_period || "").trim();
+                    var chartLabel = period ? tn + " · " + period : tn;
+                    html += "<tr><td>" + esc(chartLabel) + "</td><td>#" + esc(String(rank)) + "</td></tr>";
+                  });
+                  html += "</tbody></table></div>";
                 });
-              });
-              html += "</tbody></table></div>";
+              }
+              html += "</div></div>";
             });
-            if (html) {
-              listEl.innerHTML = html;
-              listEl.style.display = "block";
-            } else {
-              if (empty) empty.style.display = "block";
-            }
+            listEl.innerHTML = html;
+            listEl.style.display = "grid";
           })
           .catch(function () {
             if (loading) loading.style.display = "none";
@@ -990,99 +1079,387 @@
           });
       }
 
-      function loadMilestoneLogs(showLoading) {
-        var loading = document.querySelector(".js-milestone-loading");
-        var table = document.getElementById("milestone-log-table");
-        var tbody = document.getElementById("milestone-log-tbody");
-        var empty = document.getElementById("milestone-log-empty");
-        var errEl = document.getElementById("milestone-log-err");
-        if (!tbody) return;
-        if (showLoading !== false && loading) loading.style.display = "block";
-        if (table) table.style.display = "none";
-        if (empty) empty.style.display = "none";
-        if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-        fetch("/api/milestone-logs?limit=20")
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (loading) loading.style.display = "none";
-            if (!data.ok || !Array.isArray(data.entries)) {
-              if (errEl) { errEl.textContent = data.error || "加载失败"; errEl.style.display = "block"; }
-              return;
-            }
-            var entries = data.entries;
-            if (entries.length === 0) {
-              if (empty) empty.style.display = "block";
-              return;
-            }
-            tbody.innerHTML = entries.map(function (e) {
-              var name = (e.song_name || "-").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-              var nameAttr = (e.song_name || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-              return "<tr><td>" + (e.time || "") + "</td><td>" + (e.platform_name || e.platform || "") + "</td><td>" + name + "</td><td>" + (e.favorite_count ?? "") + "</td><td><button type=\"button\" class=\"btn milestone-delete-btn\" data-platform=\"" + (e.platform || "") + "\" data-time=\"" + (e.time || "").replace(/"/g, "&quot;") + "\" data-song-name=\"" + nameAttr + "\" data-favorite-count=\"" + (e.favorite_count ?? "") + "\">删除</button></td></tr>";
-            }).join("");
-            if (table) table.style.display = "table";
-            document.querySelectorAll(".milestone-delete-btn").forEach(function (btn) {
-              btn.addEventListener("click", function () {
-                var platform = btn.getAttribute("data-platform");
-                var time = btn.getAttribute("data-time");
-                var songName = btn.getAttribute("data-song-name");
-                var count = btn.getAttribute("data-favorite-count");
-                if (!platform || time === null || songName === null || !count) return;
-                btn.disabled = true;
-                fetch("/api/milestone-delete", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ platform: platform, time: time, song_name: songName, favorite_count: parseInt(count, 10) })
-                })
-                  .then(function (r) { return r.json(); })
-                  .then(function (data) {
-                    if (data.ok) loadMilestoneLogs(false);
-                    else if (document.getElementById("milestone-outlier-msg")) document.getElementById("milestone-outlier-msg").textContent = data.error || "删除失败";
-                  })
-                  .catch(function () {
-                    if (document.getElementById("milestone-outlier-msg")) document.getElementById("milestone-outlier-msg").textContent = "请求失败";
-                  })
-                  .finally(function () { btn.disabled = false; });
-              });
-            });
-          })
-          .catch(function () {
-            if (loading) loading.style.display = "none";
-            if (errEl) { errEl.textContent = "请求失败"; errEl.style.display = "block"; }
-          });
+      function formatMilestoneFavoriteWan(count) {
+        var n = parseInt(count, 10);
+        if (isNaN(n) || n < 0) return "-";
+        if (n < 10000) return "&lt;1W+";
+        return Math.floor(n / 10000) + "W+";
       }
-      loadToplistHistory(true);
-      loadMilestoneLogs(true);
-      setInterval(function () { loadToplistHistory(false); loadMilestoneLogs(false); }, 60 * 1000);
 
-      (function () {
-        var btn = document.getElementById("milestone-remove-outliers-btn");
-        var platformEl = document.getElementById("milestone-outlier-platform");
-        var msgEl = document.getElementById("milestone-outlier-msg");
-        if (btn && platformEl) {
+      function milestoneEsc(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+
+      function milestoneAttr(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      /** 按歌曲分组；组内按时间升序；组顺序按该歌「最近一条」时间倒序 */
+      function groupMilestonesBySong(rows) {
+        var map = {};
+        rows.forEach(function (e) {
+          var k = e.song_name != null && String(e.song_name).trim() !== "" ? String(e.song_name) : "\u0000";
+          if (!map[k]) map[k] = [];
+          map[k].push(e);
+        });
+        var keys = Object.keys(map);
+        keys.sort(function (a, b) {
+          if (a === "\u0000") return 1;
+          if (b === "\u0000") return -1;
+          var maxT = function (arr) {
+            var m = "";
+            arr.forEach(function (x) {
+              var t = x.time || "";
+              if (t > m) m = t;
+            });
+            return m;
+          };
+          return maxT(map[b]).localeCompare(maxT(map[a]));
+        });
+        return keys.map(function (k) {
+          var list = map[k].slice().sort(function (x, y) {
+            return (y.time || "").localeCompare(x.time || "");
+          });
+          return { songKey: k, songName: k === "\u0000" ? "-" : k, entries: list };
+        });
+      }
+
+      function bindMilestoneDeleteButtons(errEl) {
+        document.querySelectorAll("#milestone-grid .milestone-delete-btn").forEach(function (btn) {
           btn.addEventListener("click", function () {
-            if (msgEl) msgEl.textContent = "";
+            var platform = btn.getAttribute("data-platform");
+            var time = btn.getAttribute("data-time");
+            var songName = btn.getAttribute("data-song-name");
+            var count = btn.getAttribute("data-favorite-count");
+            if (!platform || time === null || songName === null || !count) return;
             btn.disabled = true;
-            fetch("/api/milestone-remove-outliers", {
+            fetch("/api/milestone-delete", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ platform: platformEl.value, threshold: 100 })
+              body: JSON.stringify({ platform: platform, time: time, song_name: songName, favorite_count: parseInt(count, 10) })
             })
               .then(function (r) { return r.json(); })
               .then(function (data) {
                 if (data.ok) {
-                  if (msgEl) msgEl.textContent = data.message || "已处理。";
+                  if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
                   loadMilestoneLogs(false);
-                } else {
-                  if (msgEl) msgEl.textContent = data.error || "操作失败";
+                } else if (errEl) {
+                  errEl.textContent = data.error || "删除失败";
+                  errEl.style.display = "block";
                 }
               })
               .catch(function () {
-                if (msgEl) msgEl.textContent = "请求失败";
+                if (errEl) {
+                  errEl.textContent = "请求失败";
+                  errEl.style.display = "block";
+                }
               })
               .finally(function () { btn.disabled = false; });
           });
+        });
+      }
+
+      function loadMilestoneLogs(showLoading) {
+        var loading = document.querySelector(".js-milestone-loading");
+        var grid = document.getElementById("milestone-grid");
+        var empty = document.getElementById("milestone-log-empty");
+        var errEl = document.getElementById("milestone-log-err");
+        if (!grid) return;
+        if (showLoading !== false && loading) loading.style.display = "block";
+        grid.style.display = "none";
+        grid.innerHTML = "";
+        if (empty) empty.style.display = "none";
+        if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+        fetch("/api/milestone-logs?limit=80")
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (loading) loading.style.display = "none";
+            if (!data.ok || !data.by_platform) {
+              if (errEl) { errEl.textContent = data.error || "加载失败"; errEl.style.display = "block"; }
+              return;
+            }
+            var by = data.by_platform;
+            var order = [
+              { key: "qq", cls: "milestone-card--qq", title: "QQ音乐" },
+              { key: "netease", cls: "milestone-card--netease", title: "网易云音乐" },
+              { key: "kugou", cls: "milestone-card--kugou", title: "酷狗音乐" }
+            ];
+            var html = "";
+            order.forEach(function (p) {
+              var rows = by[p.key] || [];
+              html += "<div class=\"milestone-card " + p.cls + "\">";
+              html += "<div class=\"milestone-card-head\">" + milestoneEsc(p.title) + "</div>";
+              html += "<div class=\"milestone-card-body\">";
+              if (!rows.length) {
+                html += "<div class=\"milestone-card-empty\">暂无记录</div>";
+              } else {
+                groupMilestonesBySong(rows).forEach(function (g) {
+                  html += "<div class=\"milestone-song-group\">";
+                  html += "<div class=\"milestone-song-title\" title=\"" + milestoneEsc(g.songName) + "\">" + milestoneEsc(g.songName) + "</div>";
+                  html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>时间</th><th>收藏</th><th>操作</th></tr></thead><tbody>";
+                  g.entries.forEach(function (e) {
+                    var fav = e.favorite_count;
+                    var favNum = parseInt(fav, 10);
+                    var favDisplay = formatMilestoneFavoriteWan(fav);
+                    var titleExact = !isNaN(favNum) ? "精确收藏量 " + favNum.toLocaleString("zh-CN") : "";
+                    var nameAttr = milestoneAttr(e.song_name != null ? e.song_name : "");
+                    html += "<tr><td>" + milestoneEsc(e.time || "") + "</td><td title=\"" + milestoneEsc(titleExact) + "\">" + favDisplay + "</td><td><button type=\"button\" class=\"milestone-delete-btn\" data-platform=\"" + milestoneEsc(e.platform || p.key) + "\" data-time=\"" + milestoneEsc(e.time || "") + "\" data-song-name=\"" + nameAttr + "\" data-favorite-count=\"" + (fav != null ? fav : "") + "\">删除</button></td></tr>";
+                  });
+                  html += "</tbody></table></div>";
+                });
+              }
+              html += "</div></div>";
+            });
+            grid.innerHTML = html;
+            grid.style.display = "grid";
+            bindMilestoneDeleteButtons(errEl);
+          })
+          .catch(function () {
+            if (loading) loading.style.display = "none";
+            if (errEl) { errEl.textContent = "请求失败"; errEl.style.display = "block"; }
+          });
+      }
+
+      function topsongsSongName(row) {
+        return String((row && row.song_name) || "-");
+      }
+      function topsongsSongUrl(platform, row) {
+        if (!row) return "";
+        var mid = row.song_mid || "";
+        var mix = row.mixsongid;
+        if (platform === "qq" && mid) {
+          return "https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid=" + encodeURIComponent(mid) + "&type=" + encodeURIComponent(mid) + "&openinqqmusic=0";
         }
-      })();
+        if (platform === "kugou") {
+          if (mix != null && mix !== "") {
+            return "https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid=" + encodeURIComponent(String(mix));
+          }
+          if (mid) {
+            return "https://www.kugou.com/song/#hash=" + encodeURIComponent(mid);
+          }
+        }
+        return "";
+      }
+      function topsongsAppendRows(platform, rows) {
+        if (!rows || !rows.length) return;
+        if (!topsongsChartState[platform]) topsongsChartState[platform] = [];
+        rows.forEach(function (row) {
+          topsongsChartState[platform].push({
+            rank: row.rank,
+            name: topsongsSongName(row),
+            value: row.value != null ? Number(row.value) : 0,
+            url: topsongsSongUrl(platform, row)
+          });
+        });
+      }
+      function updateTopSongsButtons(platform) {
+        var grid = document.getElementById("topsongs-grid");
+        if (!grid) return;
+        var loadBtn = grid.querySelector(".topsongs-load-more[data-platform=\"" + platform + "\"]");
+        var collapseBtn = grid.querySelector(".topsongs-collapse[data-platform=\"" + platform + "\"]");
+        var total = (topsongsChartState[platform] || []).length;
+        var visible = topsongsVisibleCount[platform] || 10;
+        var hasMore = !!topsongsHasMore[platform];
+        if (loadBtn) {
+          loadBtn.style.display = hasMore ? "block" : "none";
+          loadBtn.textContent = "▼ 加载更多（每次 10 条）";
+        }
+        if (collapseBtn) {
+          collapseBtn.style.display = (total > 10 && visible > 10) ? "block" : "none";
+        }
+      }
+      function renderTopSongsChart(platform) {
+        var allRows = topsongsChartState[platform] || [];
+        var visible = topsongsVisibleCount[platform] || 10;
+        var state = allRows.slice(0, visible);
+        var holder = document.getElementById("topsongs-echart-" + platform);
+        if (!holder || typeof echarts === "undefined") return;
+        if (!state.length) {
+          holder.innerHTML = "<div class=\"subtitle\" style=\"padding: 16px 0;\">暂无数据</div>";
+          return;
+        }
+        if (holder.offsetParent === null) {
+          setTimeout(function () { renderTopSongsChart(platform); }, 120);
+          return;
+        }
+        var old = echarts.getInstanceByDom(holder);
+        if (old) {
+          try { old.dispose(); } catch (e) {}
+        }
+        var chartHeight = Math.max(420, state.length * 40 + 90);
+        holder.style.height = String(chartHeight) + "px";
+        var chart = echarts.init(holder);
+        var palette = getThemePalette();
+        var yLabels = state.map(function (r) { return String(r.rank || "-") + ". " + r.name; });
+        var vals = state.map(function (r) { return Number(r.value) || 0; });
+        chart.setOption({
+          grid: { left: 10, right: 18, top: 10, bottom: 8, containLabel: true },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow", shadowStyle: { color: "rgba(100,116,139,0.12)" } },
+            formatter: function (params) {
+              var idx = params && params[0] ? params[0].dataIndex : -1;
+              if (idx < 0 || !state[idx]) return "";
+              var row = state[idx];
+              return milestoneEsc(row.name) + "<br/>收藏量: " + numberFmt(row.value);
+            }
+          },
+          xAxis: {
+            type: "value",
+            axisLabel: { color: palette.muted },
+            splitLine: { lineStyle: { color: palette.grid } }
+          },
+          yAxis: {
+            type: "category",
+            data: yLabels,
+            inverse: true,
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: palette.border } },
+            axisLabel: {
+              color: palette.text,
+              interval: 0,
+              width: 240,
+              overflow: "truncate",
+              margin: 10
+            }
+          },
+          series: [{
+            type: "bar",
+            data: vals,
+            barMaxWidth: 18,
+            barMinHeight: 3,
+            barCategoryGap: "44%",
+            showBackground: true,
+            backgroundStyle: { color: "rgba(148,163,184,0.12)", borderRadius: 999 },
+            itemStyle: {
+              borderRadius: [0, 999, 999, 0],
+              shadowColor: palette.shadow,
+              shadowBlur: 12,
+              color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                { offset: 0, color: palette.barEnd },
+                { offset: 1, color: palette.barStart }
+              ])
+            },
+            label: {
+              show: true,
+              position: "right",
+              color: palette.text,
+              formatter: function (p) { return numberFmt(p.value); }
+            },
+            animationDuration: 900,
+            animationEasing: "elasticOut"
+          }]
+        });
+        chart.off("click");
+        chart.on("click", function (p) {
+          var idx = p && p.dataIndex != null ? p.dataIndex : -1;
+          var row = idx >= 0 ? state[idx] : null;
+          if (row && row.url) window.open(row.url, "_blank", "noopener,noreferrer");
+        });
+        chart.resize();
+        window.requestAnimationFrame(function () { chart.resize(); });
+        registerEchart(chart);
+      }
+      function renderAllTopSongsCharts() {
+        ["qq", "netease", "kugou"].forEach(renderTopSongsChart);
+      }
+
+      function loadTopSongsInit() {
+        var loading = document.querySelector(".js-topsongs-loading");
+        var grid = document.getElementById("topsongs-grid");
+        var errEl = document.getElementById("topsongs-err");
+        var wrap = document.getElementById("topsongs-wrap");
+        if (!grid || !wrap) return;
+        var artist = wrap.getAttribute("data-artist") || "";
+        var topsongsOffsets = { qq: 0, netease: 0, kugou: 0 };
+        topsongsChartState = { qq: [], netease: [], kugou: [] };
+        topsongsVisibleCount = { qq: 10, netease: 10, kugou: 10 };
+        topsongsHasMore = { qq: false, netease: false, kugou: false };
+        var order = [
+          { key: "qq", cls: "milestone-card--qq", title: "QQ音乐" },
+          { key: "netease", cls: "milestone-card--netease", title: "网易云音乐" },
+          { key: "kugou", cls: "milestone-card--kugou", title: "酷狗音乐" }
+        ];
+        var html = "";
+        order.forEach(function (p) {
+          html += "<div class=\"milestone-card " + p.cls + "\">";
+          html += "<div class=\"milestone-card-head\">" + milestoneEsc(p.title) + "</div>";
+          html += "<div class=\"milestone-card-body\">";
+          html += "<div class=\"chart-card\"><div class=\"chart-title\">收藏 TOP</div>";
+          html += "<div class=\"topsongs-echart\" id=\"topsongs-echart-" + p.key + "\"></div>";
+          html += "<div class=\"topsongs-actions\">";
+          html += "<button type=\"button\" class=\"topsongs-load-more\" data-platform=\"" + p.key + "\" style=\"display:none;\">▼ 加载更多（每次 10 条）</button>";
+          html += "<button type=\"button\" class=\"topsongs-collapse\" data-platform=\"" + p.key + "\" style=\"display:none;\">▲ 收起到前10</button>";
+          html += "</div>";
+          html += "</div></div></div>";
+        });
+        grid.innerHTML = html;
+        grid.style.display = "grid";
+        var pending = 3;
+        function doneOne() {
+          pending -= 1;
+          if (pending <= 0 && loading) loading.style.display = "none";
+        }
+        order.forEach(function (p) {
+          var url = "/api/top-songs?" + new URLSearchParams({ platform: p.key, offset: "0", limit: "10", artist: artist }).toString();
+          fetch(url + "&_=" + Date.now())
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              doneOne();
+              var btn = grid.querySelector(".topsongs-load-more[data-platform=\"" + p.key + "\"]");
+              if (!data.ok) {
+                var holder = document.getElementById("topsongs-echart-" + p.key);
+                if (holder) holder.innerHTML = "<div class=\"subtitle\" style=\"padding:8px;color:#b91c1c;\">" + milestoneEsc(data.error || "加载失败") + "</div>";
+                return;
+              }
+              topsongsOffsets[p.key] += (data.rows || []).length;
+              topsongsAppendRows(p.key, data.rows || []);
+              topsongsVisibleCount[p.key] = Math.max(10, topsongsVisibleCount[p.key] || 10);
+              topsongsHasMore[p.key] = !!data.has_more;
+              renderTopSongsChart(p.key);
+              updateTopSongsButtons(p.key);
+            })
+            .catch(function () {
+              doneOne();
+              if (errEl) { errEl.textContent = "歌曲 TOP 请求失败"; errEl.style.display = "block"; }
+            });
+        });
+        grid.querySelectorAll(".topsongs-load-more").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var plat = btn.getAttribute("data-platform");
+            if (!plat) return;
+            var off = topsongsOffsets[plat];
+            btn.disabled = true;
+            var url = "/api/top-songs?" + new URLSearchParams({ platform: plat, offset: String(off), limit: "10", artist: artist }).toString();
+            fetch(url + "&_=" + Date.now())
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                btn.disabled = false;
+                if (!data.ok) return;
+                topsongsAppendRows(plat, data.rows || []);
+                topsongsVisibleCount[plat] = (topsongsVisibleCount[plat] || 10) + (data.rows || []).length;
+                renderTopSongsChart(plat);
+                topsongsOffsets[plat] += (data.rows || []).length;
+                topsongsHasMore[plat] = !!data.has_more;
+                updateTopSongsButtons(plat);
+              })
+              .catch(function () { btn.disabled = false; });
+          });
+        });
+        grid.querySelectorAll(".topsongs-collapse").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var plat = btn.getAttribute("data-platform");
+            if (!plat) return;
+            topsongsVisibleCount[plat] = 10;
+            renderTopSongsChart(plat);
+            updateTopSongsButtons(plat);
+          });
+        });
+      }
+
+      loadToplistHistory(true);
+      loadMilestoneLogs(true);
+      setInterval(function () { loadToplistHistory(false); loadMilestoneLogs(false); }, 60 * 1000);
     })();
   </script>
   </div>

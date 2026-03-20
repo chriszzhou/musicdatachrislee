@@ -24,7 +24,7 @@
       background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
       line-height: 1.55;
     }
-    .page { max-width: 1180px; margin: 24px auto 40px; padding: 0 16px; }
+    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
     .header-card {
       background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
       border: 1px solid var(--border);
@@ -102,7 +102,7 @@
       <div id="toplist-err" class="err" style="display:none;"></div>
       <table id="toplist-table" style="display:none;">
         <thead>
-          <tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th><th>日期</th></tr>
+          <tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th></tr>
         </thead>
         <tbody id="toplist-tbody"></tbody>
       </table>
@@ -314,10 +314,7 @@
         var html = "";
         items.forEach(function (item) {
           (item.rows || []).forEach(function (row) {
-            var dateStr = (row.last_seen_at || row.top_update_time || "").toString().trim();
-            if (dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
-            if (!dateStr) dateStr = "-";
-            html += "<tr><td>" + (item.platform_name || item.platform) + "</td><td>" + (row.top_name || "-") + "</td><td>" + (row.rank != null ? row.rank : "-") + "</td><td>" + (row.song_name || "-") + "</td><td>" + dateStr + "</td></tr>";
+            html += "<tr><td>" + (item.platform_name || item.platform) + "</td><td>" + (row.top_name || "-") + "</td><td>" + (row.rank != null ? row.rank : "-") + "</td><td>" + (row.song_name || "-") + "</td></tr>";
           });
         });
         tbody.innerHTML = html;

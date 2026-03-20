@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -17,20 +18,22 @@ from .config import settings
 from .web_service import (
     SUPPORTED_PLATFORMS,
     delete_milestone_entry,
+    get_artist_snapshot_metrics_all_platforms,
     get_milestone_logs,
     get_new_song_chart_data,
     get_new_song_current_metrics,
     get_new_song_toplist_rows,
     get_platform_meta,
-    get_report,
     get_report_chart_data,
+    get_reports_all_platforms,
     get_today_toplist_from_platform_dbs,
     get_top_songs,
+    get_top_songs_slice,
     normalize_platform,
-    remove_milestone_outliers,
-    search_songs,
+    search_songs_all_platforms,
     resolve_data_paths_for_debug,
 )
+from .web_service.milestones import prune_milestone_logs_sub_10k_entries
 
 app = FastAPI(title="Music Crawler Web")
 
@@ -85,6 +88,12 @@ def _base_context(platform: str) -> Dict[str, Any]:
         "new_song_name": (settings.qqmc_new_song_name or "").strip() or "春雨里",
         "default_topsongs_artist": settings.effective_default_topsongs_artist,
         "new_song_update_interval_sec": settings.qqmc_new_song_update_interval_sec,
+        "reports_by_platform": {},
+        "report_artist_mids": {},
+        "report_mode": "day",
+        "report_value": "",
+        "home_artist_metrics": {"ok": False, "by_platform": {}, "display_name": ""},
+        "home_artist_metrics_json": "{}",
     }
 
 
@@ -99,36 +108,48 @@ def _execute_action_and_build_context(
     try:
         if action == "search-songs":
             song_keyword = str(form_dict.get("song_keyword") or "").strip()
-            data = search_songs(
-                platform=platform,
+            data = search_songs_all_platforms(
                 keyword=song_keyword,
                 base_dir=PROJECT_ROOT,
-                limit=200,
+                limit=5,
             )
             context["result_type"] = "search-songs"
             context["result"] = data
             if data.get("ok"):
-                context["message"] = "歌曲搜索完成。"
+                context["message"] = "歌曲搜索完成（三平台）。"
             else:
                 context["error"] = str(data.get("error") or "歌曲搜索失败。")
         elif action == "report-changes":
-            mode = str(form_dict.get("report_mode") or "").strip()
+            report_mode = str(form_dict.get("report_mode") or "day").strip()
+            if report_mode not in ("year", "month", "day"):
+                report_mode = "day"
             value = str(form_dict.get("report_value") or "").strip()
-            artist_mid = str(form_dict.get("report_artist_mid") or "").strip()
-            data = get_report(
-                platform=platform,
-                mode=mode,
+            if not value:
+                if report_mode == "year":
+                    value = str(datetime.now(BEIJING_TZ).year)
+                elif report_mode == "month":
+                    value = datetime.now(BEIJING_TZ).strftime("%Y-%m")
+                else:
+                    value = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+            artist_name = settings.effective_default_topsongs_artist
+            reports, mids = get_reports_all_platforms(
+                mode=report_mode,
                 value=value,
-                artist_mid=artist_mid,
-                song_display_limit=15,
+                artist_name=artist_name,
                 base_dir=PROJECT_ROOT,
+                song_display_limit=15,
             )
-            context["result_type"] = "report-changes"
-            context["result"] = data
-            if data.get("ok"):
+            context["reports_by_platform"] = reports
+            context["report_artist_mids"] = mids
+            context["report_mode"] = report_mode
+            context["report_value"] = value
+            context["result_type"] = ""
+            ok_all = all(r.get("ok") for r in reports.values())
+            if ok_all:
                 context["message"] = "变化报告生成完成。"
             else:
-                context["error"] = str(data.get("error") or "变化报告生成失败。")
+                errs = [str(r.get("error") or "") for r in reports.values() if not r.get("ok")]
+                context["error"] = "；".join(e for e in errs if e) or "变化报告生成失败。"
         elif action == "top-songs":
             da = settings.effective_default_topsongs_artist
             artist_name = str(form_dict.get("topsongs_artist_name") or da).strip() or da
@@ -191,14 +212,57 @@ def _toplist_run_now_payload() -> Dict[str, Any]:
 
 @app.on_event("startup")
 def _start_schedulers() -> None:
+    prune_milestone_logs_sub_10k_entries(PROJECT_ROOT)
     _sched.start_background_schedulers(PROJECT_ROOT)
+
+
+def _home_metrics_payload() -> Dict[str, Any]:
+    """首页首屏：三平台粉丝 / 收藏合计 / 评论合计（饼图数据）。"""
+    artist = settings.effective_default_topsongs_artist
+    data = get_artist_snapshot_metrics_all_platforms(
+        artist_name=artist,
+        base_dir=PROJECT_ROOT,
+    )
+    return {
+        "home_artist_metrics": data,
+        "home_artist_metrics_json": json.dumps(data, ensure_ascii=False),
+    }
+
+
+def _changereport_payload() -> Dict[str, Any]:
+    """变化报告页：默认当前日、固定默认歌手（如李宇春），三平台各一份报告。"""
+    today = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+    artist = settings.effective_default_topsongs_artist
+    reports, mids = get_reports_all_platforms(
+        mode="day",
+        value=today,
+        artist_name=artist,
+        base_dir=PROJECT_ROOT,
+        song_display_limit=15,
+    )
+    return {
+        "reports_by_platform": reports,
+        "report_artist_mids": mids,
+        "report_mode": "day",
+        "report_value": today,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, platform: str = "qq") -> HTMLResponse:
     context = _base_context(platform)
+    context.update(await _run_in_thread(_home_metrics_payload))
     context["request"] = request
     return templates.TemplateResponse("index.html", context)
+
+
+@app.get("/changereport", response_class=HTMLResponse)
+async def changereport_page(request: Request, platform: str = "qq") -> HTMLResponse:
+    """歌手数据变化报告（三平台），独立页面以减轻首页体积。"""
+    context = _base_context(platform)
+    context.update(await _run_in_thread(_changereport_payload))
+    context["request"] = request
+    return templates.TemplateResponse("changereport.html", context)
 
 
 @app.get("/new-song", response_class=HTMLResponse)
@@ -251,6 +315,26 @@ async def api_new_song_last_update() -> JSONResponse:
     return JSONResponse({"ok": True, "last_update_at": at or "", "date_today": date_today})
 
 
+@app.get("/api/top-songs")
+async def api_top_songs(
+    platform: str,
+    offset: int = 0,
+    limit: int = 10,
+    artist: str = "",
+) -> JSONResponse:
+    """分页：歌手「收藏」TOP 排行（快照）。"""
+    name = (artist or "").strip() or settings.effective_default_topsongs_artist
+    data = await _run_in_thread(
+        get_top_songs_slice,
+        normalize_platform(platform),
+        name,
+        offset,
+        limit,
+        PROJECT_ROOT,
+    )
+    return JSONResponse(data)
+
+
 @app.post("/action/{action}", response_class=HTMLResponse)
 async def run_action(action: str, request: Request) -> HTMLResponse:
     form = await request.form()
@@ -258,12 +342,15 @@ async def run_action(action: str, request: Request) -> HTMLResponse:
     form_dict = {k: str(v) for k, v in form.items()}
     context = await _run_in_thread(_execute_action_and_build_context, action, platform, form_dict)
     context["request"] = request
-    return templates.TemplateResponse("index.html", context)
+    template = "changereport.html" if action == "report-changes" else "index.html"
+    if template == "index.html":
+        context.update(await _run_in_thread(_home_metrics_payload))
+    return templates.TemplateResponse(template, context)
 
 
 @app.get("/api/toplist-check-history")
 async def api_toplist_check_history(limit: int = 100) -> JSONResponse:
-    """榜单数据：从三平台现有库读今日上榜（按 QQMC_TOPLIST_ARTIST_NAME 过滤），网易云已去重。"""
+    """榜单数据：从三平台现有库读今日上榜（仅 QQMC_TOPLIST_ARTIST_NAME），网易云已去重。"""
     _ = limit  # 保留查询参数兼容前端，当前实现不按条数截断 runs
     payload = await _run_in_thread(_toplist_check_history_payload)
     response = JSONResponse(payload)
@@ -273,7 +360,7 @@ async def api_toplist_check_history(limit: int = 100) -> JSONResponse:
 
 @app.post("/api/toplist-check/run-now")
 async def api_toplist_check_run_now() -> JSONResponse:
-    """立即执行一次三平台榜单拉取（歌手见 QQMC_TOPLIST_ARTIST_NAME），写入各平台 toplist 库，并返回当前今日数据（网易云已去重）。"""
+    """立即执行一次三平台榜单拉取（歌手见 QQMC_TOPLIST_ARTIST_NAME），并返回该歌手今日上榜数据（网易云已去重）。"""
     payload = await _run_in_thread(_toplist_run_now_payload)
     return JSONResponse(payload)
 
@@ -289,24 +376,6 @@ async def api_milestone_logs(limit: int = 500) -> JSONResponse:
 async def api_debug_paths() -> JSONResponse:
     """返回当前解析出的 data 路径，便于排查「找不到数据」问题。"""
     data = await _run_in_thread(_debug_paths_payload)
-    return JSONResponse(data)
-
-
-@app.post("/api/milestone-remove-outliers")
-async def api_milestone_remove_outliers(request: Request) -> JSONResponse:
-    """剔除异常数据：修正变化表并删除里程碑 log 中对应异常记录。"""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    platform = normalize_platform(str(body.get("platform") or "kugou"))
-    threshold = int(body.get("threshold") or 100)
-    data = await _run_in_thread(
-        remove_milestone_outliers,
-        platform=platform,
-        base_dir=PROJECT_ROOT,
-        threshold=threshold,
-    )
     return JSONResponse(data)
 
 

@@ -87,10 +87,10 @@ uvicorn qqmusic_crawler.web_main:app --host 0.0.0.0 --port 8000 --reload
 
 Web 页面支持：
 
-- 平台切换（`qq` / `netease` / `kugou`）
+- 部分表单仍带 `platform` 参数（默认 `qq`）；若需指定平台可在 URL 加 `?platform=netease` 等（页面无平台下拉框）
 - 歌手搜索
 - 抓取并追踪（自动页数）
-- 变化报告（year/month/day）
+- 变化报告（year/month/day），独立页面：`/changereport`
 - 歌手上榜检查
 - 歌曲 TOP N（收藏 / 评论）
 
@@ -123,6 +123,12 @@ Web 页面支持：
 - 榜单库：`data/kugou_toplist.db`
 
 QQ 榜单库表名 `artist_toplist_hits`；去重键：`artist_mid + top_id + top_period + song_mid`；时间字段含 `first_seen_at`、`last_seen_at`。
+
+**榜单「今日」展示**：首页「榜单数据」会结合 `top_update_time` / `top_period` 推断声明更新日——**日榜类**仅展示声明更新日 **≥ 今日（北京）**；**周榜类**（名称/周期含「周榜 / week / 7天」等）**不按今日或 ISO 周截断**，同一榜单（`top_id` + `top_name`）**只保留最新一期**（优先按解析出的声明日，否则按周期字段如 `2026_12`，再否则按 `last_seen_at`）。
+
+**周榜如何识别**：除名称/周期含「周榜、week、7天、**每周**」等外，QQ 部分周更榜的 `top_period` 为整串 **`20xx_期号`**（如 `2026_12`，与日更的 `2026-03-20` 区分），也会按周榜规则展示（不因 `top_update_time` 比日历「今日」早一天而被日榜逻辑滤掉）。
+
+**为何页面上没有某个周榜**：爬虫只在 **配置歌手进入该榜前 N 名** 时写入行；若未进榜则库中无记录。
 
 ## 4. 数据库表
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..crawler import CrawlerService
+from ..toplist_freshness import filter_toplist_rows_for_today, infer_chart_asof_date
 from ..toplist_storage import (
     get_artist_mid_from_toplist_db,
     query_all_toplist_hits_since,
@@ -77,9 +78,14 @@ def get_today_toplist_from_platform_dbs(
     last_seen_since: str = "",
     all_songs: bool = True,
 ) -> List[Dict[str, Any]]:
-    """从三平台现有榜单库读今日上榜数据。all_songs=True 时返回所有歌曲（不按歌手过滤）；否则按 artist_name 过滤。网易云平台会对结果去重。"""
+    """从三平台现有榜单库读今日上榜数据。all_songs=True 时返回所有歌曲（不按歌手过滤）；否则按 artist_name 过滤。网易云平台会对结果去重。
+
+    会按 top_update_time / top_period 解析出的「榜单声明更新日」过滤：非周榜需声明日 >= 今日（北京）；
+    周榜不做「今日 / ISO 周」截断，同一榜单（top_id + top_name）仅保留最新一期。
+    """
+    beijing_now = datetime.now(timezone(timedelta(hours=8)))
+    today_bj = beijing_now.date()
     if not last_seen_since or len(last_seen_since) < 10:
-        beijing_now = datetime.now(timezone(timedelta(hours=8)))
         last_seen_since = beijing_now.strftime("%Y-%m-%d 00:00:00")
     results: List[Dict[str, Any]] = []
     for platform in SUPPORTED_PLATFORMS:
@@ -111,14 +117,48 @@ def get_today_toplist_from_platform_dbs(
             rows = query_artist_toplist_hits_since(db_file, artist_mid, last_seen_since, limit=500)
         if platform == "netease":
             rows = _dedupe_netease_toplist_rows(rows)
+
+        rows_fresh, finfo = filter_toplist_rows_for_today(list(rows), today_bj)
+        for r in rows_fresh:
+            d = infer_chart_asof_date(r)
+            if d:
+                r["chart_asof_date"] = d.isoformat()
+
+        freshness_note = ""
+        dc = int(finfo.get("rows_dropped_calendar") or 0)
+        dw = int(finfo.get("rows_dropped_weekly_old_period") or 0)
+        if dc > 0 and dw > 0:
+            freshness_note = "已过滤 {} 条（日榜声明更新早于今日 {}；周榜同榜仅保留最新一期 {}）。".format(
+                finfo["rows_dropped_stale"],
+                dc,
+                dw,
+            )
+        elif dc > 0:
+            freshness_note = "已过滤 {} 条「日榜声明更新早于今日」的记录。".format(finfo["rows_dropped_stale"])
+        elif dw > 0:
+            freshness_note = "已合并 {} 条周榜旧期记录（同榜仅展示最新一期）。".format(dw)
+        if finfo.get("warn_all_unknown"):
+            extra = " 该平台未能从榜单接口字段解析出更新日期，已暂时全部展示（若仍不准请检查 top_update_time 格式）。"
+            freshness_note = (freshness_note + extra).strip()
+
         results.append({
             "platform": platform,
             "platform_name": meta["name"],
             "ok": True,
-            "hits_count": len(rows),
+            "hits_count": len(rows_fresh),
             "error": None,
-            "rows": sorted(rows, key=lambda x: (str(x.get("top_name") or ""), int(x.get("rank") or 0))),
+            "rows": sorted(
+                rows_fresh, key=lambda x: (str(x.get("top_name") or ""), int(x.get("rank") or 0))
+            ),
+            "toplist_freshness": finfo,
+            "freshness_note": freshness_note,
         })
     run_at = last_seen_since[:10] if len(last_seen_since) >= 10 else ""
-    return [{"run_at": run_at, "results": results}]
+    return [
+        {
+            "run_at": run_at,
+            "calendar_today_bj": today_bj.isoformat(),
+            "results": results,
+        }
+    ]
 

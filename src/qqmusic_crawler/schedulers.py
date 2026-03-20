@@ -23,6 +23,7 @@ from .web_service import (
     prune_old_snapshots,
     update_new_song_one_platform,
 )
+from .web_service.milestones import run_kugou_outlier_correction_until_clean
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 
@@ -138,6 +139,22 @@ def _run_crawl_track_round() -> None:
                 logger.warning("定时抓取 {} 失败: {}", platform, result.get("error", "未知错误"))
         except Exception as e:
             logger.warning("定时抓取 {} 异常: {}", platform, e, exc_info=True)
+
+    # 三平台本轮 crawl_track 结束后：自动对酷狗变化库做多轮异常修正，直到本轮无修正
+    try:
+        oc = run_kugou_outlier_correction_until_clean(base_dir=root, threshold=100, max_rounds=50)
+        if oc.get("ok"):
+            if oc.get("total_updated", 0) or oc.get("total_removed_log_lines", 0):
+                logger.info(
+                    "酷狗异常修正完成: {} 轮, 累计修正 {} 条变化表, 里程碑 log 删除 {} 行",
+                    oc.get("rounds", 0),
+                    oc.get("total_updated", 0),
+                    oc.get("total_removed_log_lines", 0),
+                )
+        else:
+            logger.warning("酷狗异常修正未执行: {}", oc.get("error", ""))
+    except Exception as e:
+        logger.warning("酷狗异常修正异常: {}", e, exc_info=True)
 
 
 def _crawl_track_scheduler_loop() -> None:

@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>变化报告</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --border: #e3e8f5;
+      --text: #1f2a44;
+      --muted: #65708a;
+      --primary: #3b82f6;
+      --primary-deep: #2563eb;
+      --success-bg: #ecfdf5;
+      --success-text: #047857;
+      --error-bg: #fef2f2;
+      --error-text: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      line-height: 1.55;
+    }
+    .page { max-width: 1480px; margin: 24px auto 40px; padding: 0 20px; }
+    .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: 0 8px 24px rgba(30, 70, 140, 0.08);
+      margin-bottom: 14px;
+    }
+    .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    .nav-links a { color: var(--primary); text-decoration: none; }
+    .nav-links a:hover { text-decoration: underline; }
+    .block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      margin-top: 12px;
+      box-shadow: 0 6px 18px rgba(30, 70, 140, 0.06);
+    }
+    .block h3 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      font-weight: 650;
+      color: #20335f;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input, select, button {
+      min-height: 36px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid #d7deef;
+      background: #fff;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #8fb3ff;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+    button {
+      border: 0;
+      color: #fff;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%);
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+    }
+    button:hover { transform: translateY(-1px); }
+    code {
+      background: #f1f5ff;
+      color: #324b8a;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid #d9e4ff;
+      font-size: 12px;
+    }
+    .msg, .err {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      font-size: 14px;
+    }
+    .msg { color: var(--success-text); background: var(--success-bg); border-color: #a7f3d0; }
+    .err { color: var(--error-text); background: var(--error-bg); border-color: #fecaca; }
+    ul { margin: 8px 0 0 18px; color: #334155; }
+    table {
+      width: 100%;
+      margin-top: 10px;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid #e4eaf8;
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 14px;
+      background: #fff;
+    }
+    th, td {
+      border-bottom: 1px solid #edf1fb;
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f3f7ff;
+      color: #334b86;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: #fafcff; }
+    table td a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+    table td a:hover {
+      text-decoration: underline;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .chart-card {
+      border: 1px solid #e4eaf8;
+      border-radius: 12px;
+      padding: 10px 10px 8px;
+      background: #fbfdff;
+    }
+    .chart-title {
+      font-size: 14px;
+      font-weight: 650;
+      color: #20335f;
+      margin-bottom: 8px;
+    }
+    .milestone-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 4px;
+      align-items: stretch;
+    }
+    @media (max-width: 1100px) {
+      .milestone-grid { grid-template-columns: 1fr; }
+    }
+    .milestone-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 4px 14px rgba(30, 70, 140, 0.06);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .milestone-card-head {
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 650;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .milestone-card--qq .milestone-card-head {
+      background: linear-gradient(135deg, #22b35c 0%, #158c45 100%);
+    }
+    .milestone-card--netease .milestone-card-head {
+      background: linear-gradient(135deg, #e85a5a 0%, #c03838 100%);
+    }
+    .milestone-card--kugou .milestone-card-head {
+      background: linear-gradient(135deg, #1ab0ff 0%, #0787d4 100%);
+    }
+    .milestone-card-body {
+      flex: 1;
+      min-height: 0;
+      max-height: min(72vh, 920px);
+      overflow-y: auto;
+      padding-bottom: 4px;
+    }
+    .milestone-song-group {
+      border: 1px solid #e4e9f4;
+      border-radius: 10px;
+      margin: 10px 10px 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fbfcff 0%, #ffffff 100%);
+    }
+    .milestone-song-group:last-child { margin-bottom: 10px; }
+    .milestone-song-title {
+      padding: 8px 11px;
+      font-size: 13px;
+      font-weight: 650;
+      color: #1a3052;
+      background: linear-gradient(90deg, #eef3ff 0%, #f6f9ff 100%);
+      border-bottom: 1px solid #e8ecf7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    table.milestone-table {
+      width: 100%;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      font-size: 13px;
+      box-shadow: none;
+    }
+    table.milestone-table th {
+      background: #f6f8ff;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    table.milestone-table tr:nth-child(even) td { background: #fafcff; }
+    table.milestone-subtable { border-top: none; }
+    table.milestone-subtable th { background: #f3f5fc; font-size: 11px; }
+    table.milestone-subtable td { font-size: 12px; }
+    .milestone-card-empty {
+      padding: 22px 14px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    button.milestone-delete-btn {
+      font-size: 12px;
+      padding: 4px 10px;
+      min-height: auto;
+      background: #f1f4fb;
+      color: #4b5f9a;
+      box-shadow: none;
+      border: 1px solid #dce3f5;
+    }
+    button.milestone-delete-btn:hover {
+      transform: none;
+      background: #fff0f0;
+      color: #b91c1c;
+      border-color: #f5cccc;
+    }
+    button.topsongs-load-more {
+      width: 100%;
+      margin-top: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #345183;
+      background: #f0f4ff;
+      border: 1px solid #d7e2ff;
+      box-shadow: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button.topsongs-load-more:hover {
+      background: #e4ecff;
+      transform: none;
+    }
+    button.topsongs-load-more:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .chart-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 220px) 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .chart-label {
+      font-size: 13px;
+      color: #334155;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chart-label a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+    .chart-label a:hover {
+      text-decoration: underline;
+    }
+    .chart-track {
+      height: 10px;
+      background: #e8eefc;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .chart-fill {
+      height: 100%;
+      border-radius: 999px;
+      min-width: 2px;
+    }
+    .chart-fill-fav { background: linear-gradient(90deg, #60a5fa, #2563eb); }
+    .chart-fill-comment { background: linear-gradient(90deg, #34d399, #059669); }
+    .chart-fill-fans { background: linear-gradient(90deg, #a78bfa, #7c3aed); }
+    .chart-value {
+      font-size: 12px;
+      color: #475569;
+      min-width: 52px;
+      text-align: right;
+    }
+    .progress-wrap { display: none; margin-top: 10px; }
+    .progress-text { font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+    .progress-bar { width: 100%; height: 8px; background: #e8eefc; border-radius: 999px; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); transition: width 0.3s ease; }
+    .btn-loading { opacity: 0.7; cursor: not-allowed; }
+    [id^="report-chart-wrap-"] .chart-card {
+      background: linear-gradient(145deg, #1e293b 0%, #0f172a 50%, #020617 100%);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    [id^="report-chart-wrap-"] .chart-title {
+      color: #e2e8f0;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 12px;
+    }
+    [id^="report-chart-wrap-"] .subtitle {
+      color: #94a3b8;
+    }
+    .global-lock {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(1px);
+      display: none;
+      z-index: 9999;
+      cursor: progress;
+    }
+    .block-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .block-head h3 {
+      margin: 0;
+      flex: 1;
+      min-width: 120px;
+    }
+    button.block-toggle {
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2c4a84;
+      background: #eef3ff;
+      border: 1px solid #c7d7f5;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+    button.block-toggle:hover {
+      background: #e0e8ff;
+      transform: none;
+    }
+    .block-body--collapsible:not(.is-open) {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="global-lock" class="global-lock"></div>
+  <div class="page">
+  <div class="header-card">
+    <h1 class="title">变化报告</h1>
+    <div class="subtitle">三平台歌曲 / 粉丝指标变化（默认歌手 {{ default_topsongs_artist }}）</div>
+    <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+  </div>
+
+  {% if message %}
+  <div class="msg">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="err">{{ error }}</div>
+  {% endif %}
+
+  <div class="block">
+    <div class="block-head">
+      <h3>歌手数据变化</h3>
+      <button type="button" class="block-toggle" data-target="block-report-body" aria-expanded="true">隐藏</button>
+    </div>
+    <div id="block-report-body" class="block-body--collapsible is-open">
+    <form method="post" action="/action/report-changes" class="row js-progress-form" data-progress-label="生成变化报告中">
+      <input type="hidden" name="platform" value="{{ platform }}" />
+      <select id="report-mode" name="report_mode" aria-label="报告粒度">
+        <option value="year" {% if report_mode == 'year' %}selected{% endif %}>年</option>
+        <option value="month" {% if report_mode == 'month' %}selected{% endif %}>月</option>
+        <option value="day" {% if report_mode == 'day' %}selected{% endif %}>日</option>
+      </select>
+      <input type="hidden" id="report-value-hidden" name="report_value" value="{{ report_value }}" />
+      <input
+        id="report-value-day"
+        type="date"
+        placeholder="请选择日期"
+        value="{% if report_mode == 'day' %}{{ report_value }}{% endif %}"
+        aria-label="报告日期（按日）"
+      />
+      <input
+        id="report-value-month"
+        type="month"
+        placeholder="请选择月份"
+        value="{% if report_mode == 'month' %}{{ report_value }}{% endif %}"
+        style="display:none;"
+        aria-label="报告月份"
+      />
+      <select id="report-value-year" style="display:none;" aria-label="报告年份" data-initial-year="{{ report_value if report_mode == 'year' else '' }}"></select>
+      <button type="submit">生成报告</button>
+    </form>
+    <div class="progress-wrap js-progress-wrap">
+      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
+      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
+    </div>
+
+    <p class="subtitle" style="margin-top: 14px;">{{ report_value }} · {{ default_topsongs_artist }}</p>
+
+    {% for plat in platforms %}
+      {% set result = reports_by_platform.get(plat, {}) %}
+      <div class="report-platform-block" style="margin-top: 12px; padding-top: 12px;{% if not loop.first %} border-top: 1px solid rgba(148,163,184,0.25);{% endif %}">
+        <h4 class="subtitle" style="margin: 0 0 10px;">{{ platform_display_names.get(plat, plat) }}</h4>
+        {% if result.get("ok") %}
+      <div class="chart-card">
+        <div class="chart-title">评论增长</div>
+      {% if result.get("comment_chart_rows") %}
+      {% set comment_rows = result.get("comment_chart_rows", []) %}
+      {% set comment_max_abs = (comment_rows | map(attribute='delta_abs') | max) %}
+      {% for row in comment_rows %}
+      {% set width = ((row.get("delta_abs") or 0) * 100 / (comment_max_abs or 1)) %}
+      <div class="chart-row">
+        <div class="chart-label">{{ row.get("name") }}</div>
+        <div class="chart-track">
+          <div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div>
+        </div>
+        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -&gt; {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div>无</div>
+      {% endif %}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">收藏增长</div>
+      {% if result.get("favorite_chart_rows") %}
+      {% set favorite_rows = result.get("favorite_chart_rows", []) %}
+      {% set favorite_max_abs = (favorite_rows | map(attribute='delta_abs') | max) %}
+      {% for row in favorite_rows %}
+      {% set width = ((row.get("delta_abs") or 0) * 100 / (favorite_max_abs or 1)) %}
+      <div class="chart-row">
+        <div class="chart-label">{{ row.get("name") }}</div>
+        <div class="chart-track">
+          <div class="chart-fill chart-fill-fav" style="width: {{ '%.2f'|format(width) }}%;"></div>
+        </div>
+        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -&gt; {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div>无</div>
+      {% endif %}
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title">粉丝增长</div>
+      {% if result.get("artist_chart_rows") %}
+      {% set artist_rows = result.get("artist_chart_rows", []) %}
+      {% set artist_max_abs = (artist_rows | map(attribute='delta_abs') | max) %}
+      {% for row in artist_rows %}
+      {% set width = ((row.get("delta_abs") or 0) * 100 / (artist_max_abs or 1)) %}
+      <div class="chart-row">
+        <div class="chart-label">{{ row.get("name") }}</div>
+        <div class="chart-track">
+          <div class="chart-fill chart-fill-fans" style="width: {{ '%.2f'|format(width) }}%;"></div>
+        </div>
+        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -&gt; {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div>无</div>
+      {% endif %}
+      </div>
+
+      <div class="row" style="margin-top: 12px;">
+        <button type="button" class="js-btn-report-chart"
+          data-platform="{{ plat }}"
+          data-report-mode="{{ report_mode }}"
+          data-report-value="{{ report_value }}"
+          data-report-artist-mid="{{ report_artist_mids.get(plat, '') }}"
+          onclick="typeof window.showReportChart === 'function' && window.showReportChart(this);"
+        >变化折线图</button>
+      </div>
+      <div id="report-chart-wrap-{{ plat }}" style="display:none; margin-top: 14px;">
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">变化趋势（评论 / 收藏 / 粉丝 增量）</div>
+          <div id="report-chart-no-data-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
+          <canvas id="report-chart-canvas-{{ plat }}" height="260"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">收藏折线图（歌曲，Top10）</div>
+          <div id="report-chart-no-data-favorite-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-favorite-{{ plat }}" height="240"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">评论折线图（歌曲，Top10）</div>
+          <div id="report-chart-no-data-comment-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-comment-{{ plat }}" height="240"></canvas>
+        </div>
+        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
+          <div class="chart-title">粉丝折线图</div>
+          <div id="report-chart-no-data-fans-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+          <canvas id="report-chart-canvas-fans-{{ plat }}" height="240"></canvas>
+        </div>
+      </div>
+        {% else %}
+      <div class="err">{{ result.get("error", "加载失败") }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      function bindBlockToggles() {
+        document.querySelectorAll(".block-toggle").forEach(function (btn) {
+          if (btn.dataset.bound) return;
+          btn.dataset.bound = "1";
+          btn.addEventListener("click", function () {
+            var id = btn.getAttribute("data-target");
+            var body = document.getElementById(id);
+            if (!body) return;
+            var open = body.classList.contains("is-open");
+            if (open) {
+              body.classList.remove("is-open");
+              btn.textContent = "显示";
+              btn.setAttribute("aria-expanded", "false");
+            } else {
+              body.classList.add("is-open");
+              btn.textContent = "隐藏";
+              btn.setAttribute("aria-expanded", "true");
+            }
+          });
+        });
+      }
+      bindBlockToggles();
+
+      var isSubmitting = false;
+      var lock = document.getElementById("global-lock");
+      var reportChartInstances = [];
+
+      function destroyReportCharts() {
+        reportChartInstances.forEach(function (inst) {
+          if (inst && typeof inst.destroy === "function") inst.destroy();
+        });
+        reportChartInstances = [];
+      }
+
+      function formatChartLabels(labels, reportMode) {
+        var isDay = reportMode === "day";
+        return (labels || []).map(function (l) {
+          if (isDay && l.length > 10) return l.substring(11, 19);
+          return l;
+        });
+      }
+
+      var CHART_COLORS = [
+        "rgba(96, 165, 250, 1)", "rgba(52, 211, 153, 1)", "rgba(167, 139, 250, 1)", "rgba(248, 113, 113, 1)", "rgba(251, 191, 36, 1)",
+        "rgba(34, 211, 238, 1)", "rgba(244, 114, 182, 1)", "rgba(129, 140, 248, 1)", "rgba(45, 212, 191, 1)", "rgba(134, 239, 172, 1)"
+      ];
+      function chartGradient(r, g, b) {
+        return function (context) {
+          var chart = context.chart;
+          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
+          if (hi != null && context.datasetIndex !== hi) {
+            return "rgba(148, 163, 184, 0.06)";
+          }
+          var ctx = chart.ctx;
+          var area = chart.chartArea;
+          if (!area) return "transparent";
+          var gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+          gradient.addColorStop(0, "rgba(" + r + "," + g + "," + b + ",0.4)");
+          gradient.addColorStop(0.5, "rgba(" + r + "," + g + "," + b + ",0.12)");
+          gradient.addColorStop(1, "rgba(" + r + "," + g + "," + b + ",0)");
+          return gradient;
+        };
+      }
+      function borderColorFn(fullColor) {
+        return function (context) {
+          var chart = context.chart;
+          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
+          if (hi == null) return fullColor;
+          return context.datasetIndex === hi ? fullColor : "rgba(148, 163, 184, 0.28)";
+        };
+      }
+      var highlightDataLabelsPlugin = {
+        id: "highlightDataLabels",
+        afterDatasetsDraw: function (chart) {
+          var hi = chart.options.plugins && chart.options.plugins.highlightIndex;
+          if (hi == null || hi < 0 || !chart.data.datasets[hi]) return;
+          var ctx = chart.ctx;
+          var meta = chart.getDatasetMeta(hi);
+          var data = chart.data.datasets[hi].data || [];
+          if (!meta.data || meta.data.length === 0) return;
+          ctx.save();
+          ctx.font = "bold 11px \"PingFang SC\", \"Microsoft YaHei\", sans-serif";
+          ctx.fillStyle = "#e2e8f0";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          for (var i = 0; i < meta.data.length; i++) {
+            var point = meta.data[i];
+            var val = data[i];
+            if (point && typeof val === "number") {
+              ctx.fillText(String(val), point.x, point.y - 6);
+            }
+          }
+          ctx.restore();
+        }
+      };
+      if (typeof Chart !== "undefined") {
+        Chart.register(highlightDataLabelsPlugin);
+      }
+      var CHART_RGB = [
+        [96, 165, 250], [52, 211, 153], [167, 139, 250], [248, 113, 113], [251, 191, 36],
+        [34, 211, 238], [244, 114, 182], [129, 140, 248], [45, 212, 191], [134, 239, 172]
+      ];
+
+      window.showReportChart = function (btn) {
+        if (!btn) return;
+        var platform = btn.getAttribute("data-platform") || "qq";
+        var reportMode = btn.getAttribute("data-report-mode") || "day";
+        var reportValue = (btn.getAttribute("data-report-value") || "").trim();
+        var reportArtistMid = (btn.getAttribute("data-report-artist-mid") || "").trim();
+        var suf = platform;
+        if (!reportValue) {
+          alert("请先选择年/月/日并生成报告后再查看折线图。");
+          return;
+        }
+        var wrap = document.getElementById("report-chart-wrap-" + suf);
+        var canvas = document.getElementById("report-chart-canvas-" + suf);
+        if (!wrap || !canvas) {
+          alert("页面元素未就绪，请刷新后重试。");
+          return;
+        }
+        wrap.style.display = "block";
+        destroyReportCharts();
+        var noDataEl = document.getElementById("report-chart-no-data-" + suf);
+        var noDataFav = document.getElementById("report-chart-no-data-favorite-" + suf);
+        var noDataComment = document.getElementById("report-chart-no-data-comment-" + suf);
+        var noDataFans = document.getElementById("report-chart-no-data-fans-" + suf);
+        [noDataEl, noDataFav, noDataComment, noDataFans].forEach(function (el) {
+          if (el) el.style.display = "none";
+        });
+        var url = "/api/report-chart?platform=" + encodeURIComponent(platform) +
+          "&report_mode=" + encodeURIComponent(reportMode) +
+          "&report_value=" + encodeURIComponent(reportValue);
+        if (reportArtistMid) {
+          url += "&report_artist_mid=" + encodeURIComponent(reportArtistMid);
+        }
+        fetch(url)
+          .then(function (r) {
+            if (!r.ok) {
+              return r.text().then(function (text) {
+                var msg = "请求失败 " + r.status;
+                try {
+                  var j = JSON.parse(text);
+                  if (j && j.error) msg = j.error;
+                  else if (j && j.detail) msg = Array.isArray(j.detail) ? j.detail.map(function (d) { return d.msg || (d.loc && d.loc.join("")); }).join(" ") : String(j.detail);
+                } catch (e) {}
+                throw new Error(msg);
+              });
+            }
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data.ok) {
+              alert(data.error || "获取折线图数据失败");
+              return;
+            }
+            var labels = data.labels || [];
+            var isDay = reportMode === "day";
+            var displayLabels = formatChartLabels(labels, reportMode);
+            var chartOpts = {
+              responsive: true,
+              maintainAspectRatio: true,
+              animation: { duration: 800 },
+              plugins: {
+                highlightIndex: null,
+                legend: {
+                  position: "top",
+                  onClick: function (e, legendItem, legend) {
+                    var ch = legend.chart;
+                    var idx = legendItem.datasetIndex;
+                    var hi = ch.options.plugins.highlightIndex;
+                    ch.options.plugins.highlightIndex = (hi === idx ? null : idx);
+                    ch.update();
+                  },
+                  labels: {
+                    color: function (ctx) {
+                      var ch = ctx.chart;
+                      var hi = ch.options.plugins && ch.options.plugins.highlightIndex;
+                      if (hi == null || ctx.datasetIndex === undefined) return "#94a3b8";
+                      return ctx.datasetIndex === hi ? "#f1f5f9" : "rgba(148, 163, 184, 0.5)";
+                    },
+                    font: { size: 12, weight: "600" },
+                    padding: 16,
+                    usePointStyle: true,
+                    pointStyle: "circle"
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  grid: { color: "rgba(148, 163, 184, 0.12)", drawTicks: true },
+                  ticks: { color: "#94a3b8", maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } }
+                },
+                y: {
+                  grid: { color: "rgba(148, 163, 184, 0.12)" },
+                  ticks: { color: "#94a3b8", font: { size: 11 } },
+                  beginAtZero: true
+                }
+              }
+            };
+            var lineStyle = { borderWidth: 2.5, tension: 0.4, fill: true, pointRadius: 2.5, pointHoverRadius: 6, pointBackgroundColor: "#0f172a", pointBorderWidth: 1 };
+            if (typeof Chart === "undefined") {
+              alert("图表库未加载，请检查网络或刷新页面。");
+              return;
+            }
+
+            if (labels.length === 0) {
+              if (noDataEl) noDataEl.style.display = "block";
+              return;
+            }
+
+            var series = data.series || {};
+            reportChartInstances.push(new Chart(canvas, {
+              type: "line",
+              data: {
+                labels: displayLabels,
+                datasets: [
+                  Object.assign({ label: "评论增量", data: series.comment || [], borderColor: borderColorFn("#34d399"), backgroundColor: chartGradient(52, 211, 153) }, lineStyle),
+                  Object.assign({ label: "收藏增量", data: series.favorite || [], borderColor: borderColorFn("#60a5fa"), backgroundColor: chartGradient(96, 165, 250) }, lineStyle),
+                  Object.assign({ label: "粉丝增量", data: series.fans || [], borderColor: borderColorFn("#a78bfa"), backgroundColor: chartGradient(167, 139, 250) }, lineStyle)
+                ]
+              },
+              options: chartOpts
+            }));
+
+            function drawSubChart(canvasId, noDataId, payload, title) {
+              var c = document.getElementById(canvasId);
+              var nd = document.getElementById(noDataId);
+              if (!c) return;
+              if (!payload || !payload.datasets || payload.datasets.length === 0) {
+                if (nd) nd.style.display = "block";
+                return;
+              }
+              var datasets = payload.datasets.map(function (d, i) {
+                var rgb = CHART_RGB[i % CHART_RGB.length];
+                var color = CHART_COLORS[i % CHART_COLORS.length];
+                return Object.assign({
+                  label: d.name,
+                  data: d.data || [],
+                  borderColor: borderColorFn(color),
+                  backgroundColor: chartGradient(rgb[0], rgb[1], rgb[2])
+                }, lineStyle);
+              });
+              reportChartInstances.push(new Chart(c, {
+                type: "line",
+                data: { labels: formatChartLabels(payload.labels, reportMode), datasets: datasets },
+                options: chartOpts
+              }));
+            }
+
+            drawSubChart("report-chart-canvas-favorite-" + suf, "report-chart-no-data-favorite-" + suf, data.song_favorite || {}, "收藏");
+            drawSubChart("report-chart-canvas-comment-" + suf, "report-chart-no-data-comment-" + suf, data.song_comment || {}, "评论");
+            drawSubChart("report-chart-canvas-fans-" + suf, "report-chart-no-data-fans-" + suf, data.song_fans || {}, "粉丝");
+          })
+          .catch(function (err) {
+            alert(err && err.message ? err.message : "请求折线图数据失败");
+          });
+      };
+
+      function setGlobalSubmitting(flag) {
+        isSubmitting = flag;
+        if (lock) {
+          lock.style.display = flag ? "block" : "none";
+        }
+        var allSubmitButtons = document.querySelectorAll("button[type='submit']");
+        allSubmitButtons.forEach(function (btn) {
+          btn.disabled = flag;
+          if (flag) {
+            btn.classList.add("btn-loading");
+          } else {
+            btn.classList.remove("btn-loading");
+          }
+        });
+      }
+
+      function escapeHtml(text) {
+        return String(text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      var forms = document.querySelectorAll(".js-progress-form");
+      forms.forEach(function (form) {
+        form.addEventListener("submit", function () {
+          if (isSubmitting) {
+            return false;
+          }
+          setGlobalSubmitting(true);
+
+          var block = form.closest(".block");
+          if (!block) return;
+          var wrap = block.querySelector(".js-progress-wrap");
+          var fill = block.querySelector(".js-progress-fill");
+          var text = block.querySelector(".js-progress-text");
+          if (!wrap || !fill || !text) return;
+
+          var label = form.getAttribute("data-progress-label") || "处理中";
+          wrap.style.display = "block";
+
+          var progress = 1;
+          var elapsed = 0;
+          fill.style.width = progress + "%";
+          text.textContent = label + "... " + progress + "% (" + elapsed + "秒)";
+
+          var timer = setInterval(function () {
+            elapsed += 1;
+            if (progress < 90) {
+              var step = progress < 40 ? 6 : progress < 70 ? 3 : 1;
+              progress = Math.min(90, progress + step);
+              fill.style.width = progress + "%";
+            }
+            text.textContent = label + "... " + progress + "% (" + elapsed + "秒)";
+          }, 1000);
+
+          window.addEventListener("beforeunload", function () {
+            clearInterval(timer);
+          }, { once: true });
+        });
+      });
+
+      (function initReportDateInput() {
+        var modeEl = document.getElementById("report-mode");
+        var hiddenEl = document.getElementById("report-value-hidden");
+        var dayEl = document.getElementById("report-value-day");
+        var monthEl = document.getElementById("report-value-month");
+        var yearEl = document.getElementById("report-value-year");
+        if (!modeEl || !hiddenEl || !dayEl || !monthEl || !yearEl) return;
+
+        function buildYearOptions(now) {
+          var nowYear = now.getFullYear();
+          var start = nowYear - 15;
+          var end = nowYear + 1;
+          var initial = (yearEl.getAttribute("data-initial-year") || "").trim();
+          yearEl.innerHTML = "";
+          for (var y = end; y >= start; y--) {
+            var op = document.createElement("option");
+            op.value = String(y);
+            op.textContent = String(y);
+            yearEl.appendChild(op);
+          }
+          if (initial && /^\d{4}$/.test(initial)) {
+            yearEl.value = initial;
+          } else {
+            yearEl.value = String(nowYear);
+          }
+        }
+
+        function syncInputByMode() {
+          var now = new Date();
+          var yyyy = String(now.getFullYear());
+          var mm = String(now.getMonth() + 1).padStart(2, "0");
+          var dd = String(now.getDate()).padStart(2, "0");
+          var today = yyyy + "-" + mm + "-" + dd;
+          var thisMonth = yyyy + "-" + mm;
+
+          var mode = modeEl.value;
+          if (mode === "day") {
+            dayEl.style.display = "";
+            monthEl.style.display = "none";
+            yearEl.style.display = "none";
+            if (!dayEl.value) {
+              dayEl.value = today;
+            }
+            hiddenEl.value = dayEl.value || "";
+          } else if (mode === "month") {
+            dayEl.style.display = "none";
+            monthEl.style.display = "";
+            yearEl.style.display = "none";
+            if (!monthEl.value) {
+              monthEl.value = thisMonth;
+            }
+            hiddenEl.value = monthEl.value || "";
+          } else {
+            dayEl.style.display = "none";
+            monthEl.style.display = "none";
+            yearEl.style.display = "";
+            if (!yearEl.value) {
+              yearEl.value = yyyy;
+            }
+            hiddenEl.value = yearEl.value || "";
+          }
+        }
+
+        dayEl.addEventListener("change", function () {
+          if (modeEl.value === "day") {
+            hiddenEl.value = dayEl.value || "";
+          }
+        });
+        monthEl.addEventListener("change", function () {
+          if (modeEl.value === "month") {
+            hiddenEl.value = monthEl.value || "";
+          }
+        });
+        yearEl.addEventListener("change", function () {
+          if (modeEl.value === "year") {
+            hiddenEl.value = yearEl.value || "";
+          }
+        });
+
+        if (!modeEl.value) {
+          modeEl.value = "day";
+        }
+        buildYearOptions(new Date());
+        modeEl.addEventListener("change", syncInputByMode);
+        syncInputByMode();
+      })();
+
+    })();
+  </script>
+  </div>
+</body>
+</html>

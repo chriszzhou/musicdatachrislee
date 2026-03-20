@@ -3,9 +3,10 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..sqlite_util import connect_sqlite
+from ..toplist_storage import get_artist_mid_from_toplist_db
 from ..tracking import (
     _ensure_changes_tables,
     _list_change_month_tables,
@@ -15,7 +16,7 @@ from ..tracking import (
 )
 
 from .constants import NEW_SONG_NAME
-from .paths import _resolve_changes_db_path
+from .paths import SUPPORTED_PLATFORMS, _resolve_changes_db_path, _resolve_toplist_db_path
 
 def get_report(
     platform: str,
@@ -255,6 +256,34 @@ def get_report(
         "artist_chart_rows": artist_chart_rows[:song_display_limit],
     }
 
+
+def get_reports_all_platforms(
+    mode: str,
+    value: str,
+    artist_name: str,
+    base_dir: Optional[Path] = None,
+    song_display_limit: int = 15,
+) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
+    """为 QQ / 网易云 / 酷狗 各生成一份变化报告。artist_name 为空时不按歌手过滤。"""
+    reports: Dict[str, Dict[str, Any]] = {}
+    mids: Dict[str, str] = {}
+    name_stub = (artist_name or "").strip()
+    for plat in SUPPORTED_PLATFORMS:
+        mid = ""
+        if name_stub:
+            db_file = _resolve_toplist_db_path(plat, base_dir)
+            resolved = get_artist_mid_from_toplist_db(db_file, name_stub)
+            mid = (resolved or "").strip()
+        mids[plat] = mid
+        reports[plat] = get_report(
+            platform=plat,
+            mode=mode,
+            value=value,
+            artist_mid=mid,
+            song_display_limit=song_display_limit,
+            base_dir=base_dir,
+        )
+    return reports, mids
 
 
 def get_report_chart_data(
