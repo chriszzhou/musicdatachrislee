@@ -48,11 +48,15 @@
       margin: 0;
       font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at top left, #232f42 0%, var(--bg) 34%, var(--bg) 100%);
+      background:
+        linear-gradient(0deg, rgba(15, 22, 34, 0.70), rgba(15, 22, 34, 0.70)),
+        url("/scripts/2.jpg") center center / cover no-repeat fixed;
       line-height: 1.55;
     }
     body[data-theme="light"] {
-      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      background:
+        linear-gradient(0deg, rgba(244, 248, 255, 0.70), rgba(244, 248, 255, 0.70)),
+        url("/scripts/2.jpg") center center / cover no-repeat fixed;
     }
     .page {
       width: 100%;
