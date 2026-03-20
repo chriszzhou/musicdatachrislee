@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List
 
+from .sqlite_util import connect_sqlite
+
 
 def _ensure_toplist_table(conn: sqlite3.Connection) -> None:
     conn.execute(
@@ -41,7 +43,7 @@ def upsert_artist_toplist_hits(
     hits: Iterable[Dict[str, object]],
 ) -> int:
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_file))
+    conn = connect_sqlite(db_file)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         _ensure_toplist_table(conn)
@@ -101,8 +103,7 @@ def query_artist_toplist_hits(
     if limit <= 0:
         limit = 200
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_file))
-    conn.row_factory = sqlite3.Row
+    conn = connect_sqlite(db_file, row_factory=sqlite3.Row)
     try:
         _ensure_toplist_table(conn)
         rows = conn.execute(
@@ -120,3 +121,81 @@ def query_artist_toplist_hits(
     finally:
         conn.close()
     return [dict(r) for r in rows]
+
+
+def get_artist_mid_from_toplist_db(db_file: Path, artist_name: str) -> str | None:
+    """从榜单库里查已存在的 artist_mid（按 artist_name 匹配），避免为展示页调 API。"""
+    if not db_file.is_file():
+        return None
+    conn = connect_sqlite(db_file)
+    try:
+        _ensure_toplist_table(conn)
+        row = conn.execute(
+            "SELECT artist_mid FROM artist_toplist_hits WHERE artist_name = ? LIMIT 1",
+            (artist_name.strip(),),
+        ).fetchone()
+        return str(row[0]).strip() if row and row[0] else None
+    finally:
+        conn.close()
+
+
+def query_artist_toplist_hits_since(
+    db_file: Path,
+    artist_mid: str,
+    last_seen_since: str,
+    limit: int = 500,
+) -> List[Dict[str, object]]:
+    """读取某歌手上榜记录，仅保留 last_seen_at >= last_seen_since 的（用于“今日”数据）。"""
+    if limit <= 0:
+        limit = 500
+    if not db_file.is_file():
+        return []
+    conn = connect_sqlite(db_file, row_factory=sqlite3.Row)
+    try:
+        _ensure_toplist_table(conn)
+        rows = conn.execute(
+            """
+            SELECT artist_mid, artist_name, top_id, top_name, top_period, top_update_time,
+                   rank, song_mid, song_id, song_name, album_name, singer_names,
+                   first_seen_at, last_seen_at
+            FROM artist_toplist_hits
+            WHERE artist_mid = ? AND last_seen_at >= ?
+            ORDER BY top_name ASC, rank ASC
+            LIMIT ?
+            """,
+            (artist_mid, last_seen_since.strip(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def query_all_toplist_hits_since(
+    db_file: Path,
+    last_seen_since: str,
+    limit: int = 1000,
+) -> List[Dict[str, object]]:
+    """读取榜单库中所有歌手的今日上榜记录（last_seen_at >= last_seen_since），用于「榜单数据-所有歌曲」展示。"""
+    if limit <= 0:
+        limit = 1000
+    if not db_file.is_file():
+        return []
+    conn = connect_sqlite(db_file, row_factory=sqlite3.Row)
+    try:
+        _ensure_toplist_table(conn)
+        rows = conn.execute(
+            """
+            SELECT artist_mid, artist_name, top_id, top_name, top_period, top_update_time,
+                   rank, song_mid, song_id, song_name, album_name, singer_names,
+                   first_seen_at, last_seen_at
+            FROM artist_toplist_hits
+            WHERE last_seen_at >= ?
+            ORDER BY top_name ASC, rank ASC
+            LIMIT ?
+            """,
+            (last_seen_since.strip(), limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+

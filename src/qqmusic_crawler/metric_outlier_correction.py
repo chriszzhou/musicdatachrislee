@@ -1,17 +1,16 @@
-#!/usr/bin/env python3
 """
-修正酷狗「收藏」「评论」获取异常导致的突变值。
+修正各平台变化库中「收藏 / 评论」因抓取异常导致的突变值（三平台表结构一致）。
 
-规则（可配置）：
+规则：
   - 对同一 (artist_mid, song_mid, metric) 按 run_at 排序得到序列 v[0], v[1], ...
   - 若 |v[n]-v[n-1]| > threshold 且 |v[n]-v[n+1]| > threshold，且 |v[n-1]-v[n+1]| <= threshold，
-    则判定 v[n] 为异常，修正为 v[n-1]（或选用 median/neighbor_avg 策略）
-  - 同时修正变化表中该条记录的 new_value、delta，并可选修正对应快照 DB 中的 songs 表。
+    则判定 v[n] 为异常，按 method 修正
+  - 可选修正快照库 songs 表；并清理 milestone_*.log 中对应异常收藏记录
 
-用法：
-  python scripts/correct_kugou_metric_outliers.py --changes-db data/kugou_changes.db
-  python scripts/correct_kugou_metric_outliers.py --threshold 200 --dry-run
-  python scripts/correct_kugou_metric_outliers.py --method median --fix-snapshot
+由 web_service.remove_milestone_outliers 调用 run()；也可命令行：
+
+  python -m qqmusic_crawler.metric_outlier_correction --changes-db data/kugou_changes.db
+  python -m qqmusic_crawler.metric_outlier_correction --threshold 200 --dry-run
 """
 from __future__ import annotations
 
@@ -21,12 +20,12 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+from .sqlite_util import connect_sqlite
 
-# 变化表：可能为旧版单表 metric_changes 或按月 metric_changes_mYYYYMM
-TARGET_METRICS = ("comment_count", "favorite_count_text")
+
+def _repo_root() -> Path:
+    """仓库根目录（含 data/、src/ 的目录）。"""
+    return Path(__file__).resolve().parents[2]
 
 
 def _platform_from_changes_db(changes_db: Path) -> str:
@@ -131,15 +130,18 @@ def run(
     method: str = "neighbor",
     dry_run: bool = False,
     fix_snapshot: bool = False,
+    repo_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     method: neighbor => 修正为 n-1 的值；median => 修正为 median(n-1, n, n+1)；neighbor_avg => 修正为 (n-1+n+1)/2。
+
+    repo_root: 解析相对 snapshot 路径时用；默认仓库根（src 的上一级）。
     """
+    root = (repo_root or _repo_root()).resolve()
     if not changes_db.is_file():
         return {"error": "changes_db 不存在: {}".format(changes_db), "updated": 0, "fixed_rows": []}
 
-    conn = sqlite3.connect(str(changes_db))
-    conn.row_factory = sqlite3.Row
+    conn = connect_sqlite(changes_db, row_factory=sqlite3.Row)
     try:
         all_rows = _fetch_all_rows(conn)
     finally:
@@ -172,7 +174,7 @@ def run(
             "remove_from_milestone": remove_from_milestone,
         }
 
-    conn = sqlite3.connect(str(changes_db))
+    conn = connect_sqlite(changes_db)
     try:
         for table, row_id, new_value in to_update:
             conn.execute(
@@ -190,11 +192,11 @@ def run(
         for snapshot_path, triples in by_snapshot.items():
             p = Path(snapshot_path)
             if not p.is_absolute():
-                p = ROOT / p
+                p = root / p
             if not p.is_file():
                 continue
             try:
-                snap_conn = sqlite3.connect(str(p))
+                snap_conn = connect_sqlite(p)
                 for artist_mid, song_mid, metric, corrected in triples:
                     col = "comment_count" if metric == "comment_count" else "favorite_count_text"
                     snap_conn.execute(
@@ -247,18 +249,23 @@ def run(
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="修正酷狗收藏/评论异常突变值并更新变化表")
-    ap.add_argument("--changes-db", default="data/kugou_changes.db", help="酷狗变化库路径")
+    ap = argparse.ArgumentParser(description="修正收藏/评论异常突变值并更新变化表（三平台）")
+    ap.add_argument("--changes-db", default="data/kugou_changes.db", help="变化库路径")
     ap.add_argument("--threshold", type=int, default=100, help="相邻差大于此视为异常；n-1 与 n+1 差小于此视为一致")
-    ap.add_argument("--method", choices=("neighbor", "median", "neighbor_avg"), default="neighbor",
-                    help="neighbor=改为 n-1 的值；median=改为三者中位数；neighbor_avg=改为 (n-1+n+1)/2")
+    ap.add_argument(
+        "--method",
+        choices=("neighbor", "median", "neighbor_avg"),
+        default="neighbor",
+        help="neighbor=改为 n-1；median=三者中位数；neighbor_avg=(n-1+n+1)/2",
+    )
     ap.add_argument("--dry-run", action="store_true", help="只检测不写入")
-    ap.add_argument("--fix-snapshot", action="store_true", help="同时修正对应快照 DB 中的 songs 表（未完全实现可忽略）")
+    ap.add_argument("--fix-snapshot", action="store_true", help="同时修正对应快照 DB 中的 songs 表")
     args = ap.parse_args()
 
+    root = _repo_root()
     changes_db = Path(args.changes_db)
     if not changes_db.is_absolute():
-        changes_db = ROOT / changes_db
+        changes_db = root / changes_db
 
     result = run(
         changes_db=changes_db,
@@ -266,6 +273,7 @@ def main() -> int:
         method=args.method,
         dry_run=args.dry_run,
         fix_snapshot=args.fix_snapshot,
+        repo_root=root,
     )
 
     if result.get("error"):

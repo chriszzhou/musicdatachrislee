@@ -4,17 +4,29 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.orm import Session
 
 from .models import Artist, Base, Song, to_json
+from .sqlite_util import CONNECT_TIMEOUT, apply_pragmas_to_dbapi_connection
 
 
 class Storage:
     def __init__(self, database_url: str):
         self.database_url = database_url
         self._ensure_sqlite_parent(database_url)
-        self.engine = create_engine(database_url, future=True)
+        if database_url.startswith("sqlite:///"):
+            self.engine = create_engine(
+                database_url,
+                future=True,
+                connect_args={"timeout": CONNECT_TIMEOUT},
+            )
+
+            @event.listens_for(self.engine, "connect")
+            def _apply_sqlite_pragmas(dbapi_connection: object, _connection_record: object) -> None:
+                apply_pragmas_to_dbapi_connection(dbapi_connection)
+        else:
+            self.engine = create_engine(database_url, future=True)
 
     @staticmethod
     def _ensure_sqlite_parent(database_url: str) -> None:

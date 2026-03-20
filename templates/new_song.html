@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新歌 - {{ new_song_name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --border: #e3e8f5;
+      --text: #1f2a44;
+      --muted: #65708a;
+      --primary: #3b82f6;
+      --error-bg: #fef2f2;
+      --error-text: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top left, #e9f0ff 0%, var(--bg) 40%, var(--bg) 100%);
+      line-height: 1.55;
+    }
+    .page { max-width: 1180px; margin: 24px auto 40px; padding: 0 16px; }
+    .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: 0 8px 24px rgba(30, 70, 140, 0.08);
+      margin-bottom: 14px;
+    }
+    .title { margin: 0 0 8px; font-size: 26px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    .nav-links { margin-top: 10px; }
+    .nav-links a { color: var(--primary); text-decoration: none; margin-right: 14px; }
+    .nav-links a:hover { text-decoration: underline; }
+    .block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      margin-top: 12px;
+      box-shadow: 0 6px 18px rgba(30, 70, 140, 0.06);
+    }
+    .block h3 { margin: 0 0 10px; font-size: 17px; font-weight: 650; color: #20335f; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { background: #f0f4ff; font-weight: 600; }
+    .err { color: var(--error-text); background: var(--error-bg); padding: 8px 12px; border-radius: 8px; margin-top: 8px; }
+    .chart-wrap {
+      margin-top: 14px; margin-bottom: 24px;
+      max-width: 640px; height: 240px;
+      padding: 16px;
+      background: linear-gradient(145deg, #fafbff 0%, #f0f4ff 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(59, 130, 246, 0.12);
+      box-shadow: 0 2px 12px rgba(30, 70, 140, 0.06);
+    }
+    .chart-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; letter-spacing: 0.02em; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-card">
+      <h1 class="title">新歌 - {{ new_song_name }}</h1>
+      <p class="subtitle">数据{% if new_song_update_interval_sec >= 60 and new_song_update_interval_sec % 60 == 0 %}约每 {{ new_song_update_interval_sec // 60 }} 分钟{% else %}约每 {{ new_song_update_interval_sec }} 秒{% endif %}从三平台拉取并写入各平台最新快照</p>
+      <p class="subtitle" id="last-update-line"><span id="last-update-at">--</span></p>
+      <div class="nav-links">
+        <a href="/">← 首页</a>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3>一、当前歌曲三平台收藏量、评论数</h3>
+      <div id="current-loading" class="subtitle">加载中...</div>
+      <div id="current-err" class="err" style="display:none;"></div>
+      <table id="current-table" style="display:none;">
+        <thead>
+          <tr><th>平台</th><th>收藏量</th><th>评论数</th></tr>
+        </thead>
+        <tbody id="current-tbody"></tbody>
+      </table>
+      <p id="current-snapshot-hint" class="subtitle" style="margin-top:8px; display:none;"></p>
+    </div>
+
+    <div class="block">
+      <h3>二、收藏数曲线（三图）</h3>
+      <p class="subtitle">从开始统计（3.16）到当前时间，均匀取约 10 个时间点，Y 轴为各时刻收藏数</p>
+      <div id="chart-qq" class="chart-wrap"><div class="chart-title">QQ音乐</div><canvas id="canvas-qq"></canvas></div>
+      <div id="chart-netease" class="chart-wrap"><div class="chart-title">网易云音乐</div><canvas id="canvas-netease"></canvas></div>
+      <div id="chart-kugou" class="chart-wrap"><div class="chart-title">酷狗音乐</div><canvas id="canvas-kugou"></canvas></div>
+    </div>
+
+    <div class="block">
+      <h3>三、榜单数据</h3>
+      <p class="subtitle">来自各平台 toplist 库中「{{ new_song_name }}」的上榜记录</p>
+      <div id="toplist-loading" class="subtitle">加载中...</div>
+      <div id="toplist-err" class="err" style="display:none;"></div>
+      <table id="toplist-table" style="display:none;">
+        <thead>
+          <tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th><th>日期</th></tr>
+        </thead>
+        <tbody id="toplist-tbody"></tbody>
+      </table>
+      <div id="toplist-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无上榜记录</div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  var today = new Date();
+  var value = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+
+  function applyServerDateToday(serverDate) {
+    if (serverDate && /^\d{4}-\d{2}-\d{2}$/.test(serverDate)) value = serverDate;
+  }
+
+  function loadCurrent() {
+    var loading = document.getElementById("current-loading");
+    var errEl = document.getElementById("current-err");
+    var table = document.getElementById("current-table");
+    var tbody = document.getElementById("current-tbody");
+    fetch("/api/new-song/current?_=" + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        loading.style.display = "none";
+        if (!data.ok) {
+          errEl.textContent = data.error || "加载失败";
+          errEl.style.display = "block";
+          return;
+        }
+        errEl.style.display = "none";
+        var platforms = data.platforms || {};
+        var order = ["qq", "netease", "kugou"];
+        var html = "";
+        var snapshotParts = [];
+        order.forEach(function (p) {
+          var v = platforms[p];
+          if (!v) return;
+          if (v.ok) {
+            html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? v.favorite_count : "-") + "</td><td>" + (v.comment_count != null ? v.comment_count : "-") + "</td></tr>";
+            if (v.snapshot_at) snapshotParts.push((v.platform_name || p) + " " + v.snapshot_at);
+          } else {
+            html += "<tr><td>" + p + "</td><td colspan=\"2\" class=\"err\">" + (v.error || "无数据") + "</td></tr>";
+          }
+        });
+        tbody.innerHTML = html || "<tr><td colspan=\"3\">暂无数据</td></tr>";
+        table.style.display = "table";
+        var hint = document.getElementById("current-snapshot-hint");
+        if (hint) {
+          hint.textContent = snapshotParts.length ? "数据来自各平台最新快照（" + snapshotParts.join("；") + " 北京时间）" : "";
+          hint.style.display = snapshotParts.length ? "block" : "none";
+        }
+      })
+      .catch(function (e) {
+        loading.style.display = "none";
+        errEl.textContent = "请求失败: " + (e.message || "");
+        errEl.style.display = "block";
+      });
+  }
+
+  function reduceChartPoints(labels, fav) {
+    if (!labels.length || !fav.length) return { labels: labels, fav: fav };
+    var outLabels = [];
+    var outFav = [];
+    for (var i = 0; i < fav.length; i++) {
+      var v = fav[i];
+      if (i === 0 || v !== fav[i - 1]) {
+        outLabels.push(labels[i]);
+        outFav.push(v);
+      }
+    }
+    if (outLabels.length <= 10) return { labels: outLabels, fav: outFav };
+    var sampledLabels = [];
+    var sampledFav = [];
+    var n = outLabels.length;
+    for (var j = 0; j < 10; j++) {
+      var idx = j === 9 ? n - 1 : Math.round(j * (n - 1) / 9);
+      sampledLabels.push(outLabels[idx]);
+      sampledFav.push(outFav[idx]);
+    }
+    return { labels: sampledLabels, fav: sampledFav };
+  }
+
+  var chartColors = {
+    qq:     { main: "rgb(0, 180, 42)",   fill: "rgba(0, 180, 42, 0.15)",   glow: "rgba(0, 180, 42, 0.25)" },
+    netease: { main: "rgb(212, 58, 58)", fill: "rgba(212, 58, 58, 0.12)",  glow: "rgba(212, 58, 58, 0.22)" },
+    kugou:  { main: "rgb(255, 138, 0)",  fill: "rgba(255, 138, 0, 0.15)",  glow: "rgba(255, 138, 0, 0.25)" }
+  };
+
+  var chartInstances = {};
+  function drawChart(canvasId, platform, title) {
+    if (chartInstances[canvasId]) {
+      chartInstances[canvasId].destroy();
+      chartInstances[canvasId] = null;
+    }
+    fetch("/api/new-song/chart?platform=" + encodeURIComponent(platform) + "&mode=range&_=" + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.labels || data.labels.length === 0) return;
+        var labels = data.labels;
+        var fav = data.series.favorite || [];
+        if (platform === "qq") {
+          var qqLabels = [];
+          var qqFav = [];
+          for (var i = 0; i < fav.length; i++) {
+            if (fav[i] !== 0 && fav[i] !== null && fav[i] !== undefined) {
+              qqLabels.push(labels[i]);
+              qqFav.push(fav[i]);
+            }
+          }
+          labels = qqLabels;
+          fav = qqFav;
+        }
+        if (labels.length === 0) return;
+        var reduced = reduceChartPoints(labels, fav);
+        labels = reduced.labels;
+        fav = reduced.fav;
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        var ctx = canvas.getContext("2d");
+        var colors = chartColors[platform] || chartColors.qq;
+        var h = 240;
+        var gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, colors.fill);
+        gradient.addColorStop(1, "rgba(255,255,255,0)");
+        chartInstances[canvasId] = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "收藏数",
+                data: fav,
+                borderColor: colors.main,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2.5,
+                pointBackgroundColor: "#fff",
+                pointBorderColor: colors.main,
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointHoverBorderWidth: 2
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 800 },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "rgba(31, 42, 68, 0.9)",
+                titleFont: { size: 12, weight: "600" },
+                bodyFont: { size: 13 },
+                padding: 10,
+                cornerRadius: 8,
+                displayColors: true
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: "rgba(0,0,0,0.06)", drawBorder: false },
+                ticks: { font: { size: 11 }, color: "#65708a", padding: 6 }
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  font: { size: 13, weight: "500" },
+                  color: "#1f2a44",
+                  maxRotation: 45,
+                  minRotation: 25,
+                  padding: 10
+                }
+              }
+            },
+            interaction: { intersect: false, mode: "index" }
+          }
+        });
+      });
+  }
+
+  function loadCharts() {
+    drawChart("canvas-qq", "qq", "QQ音乐");
+    drawChart("canvas-netease", "netease", "网易云");
+    drawChart("canvas-kugou", "kugou", "酷狗");
+  }
+
+  function loadToplist() {
+    var loading = document.getElementById("toplist-loading");
+    var errEl = document.getElementById("toplist-err");
+    var table = document.getElementById("toplist-table");
+    var tbody = document.getElementById("toplist-tbody");
+    var empty = document.getElementById("toplist-empty");
+    fetch("/api/new-song/toplist?_=" + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        loading.style.display = "none";
+        if (!data.ok) {
+          errEl.textContent = data.error || "加载失败";
+          errEl.style.display = "block";
+          return;
+        }
+        errEl.style.display = "none";
+        var items = data.items || [];
+        var html = "";
+        items.forEach(function (item) {
+          (item.rows || []).forEach(function (row) {
+            var dateStr = (row.last_seen_at || row.top_update_time || "").toString().trim();
+            if (dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
+            if (!dateStr) dateStr = "-";
+            html += "<tr><td>" + (item.platform_name || item.platform) + "</td><td>" + (row.top_name || "-") + "</td><td>" + (row.rank != null ? row.rank : "-") + "</td><td>" + (row.song_name || "-") + "</td><td>" + dateStr + "</td></tr>";
+          });
+        });
+        tbody.innerHTML = html;
+        if (html) {
+          table.style.display = "table";
+          empty.style.display = "none";
+        } else {
+          empty.style.display = "block";
+        }
+      })
+      .catch(function (e) {
+        loading.style.display = "none";
+        errEl.textContent = "请求失败: " + (e.message || "");
+        errEl.style.display = "block";
+      });
+  }
+
+  var lastUpdateAt = "";
+  var initialLoadDone = false;
+  function loadLastUpdate() {
+    fetch("/api/new-song/last-update?_=" + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var at = data.last_update_at || "";
+        var dateToday = data.date_today || "";
+        if (dateToday) applyServerDateToday(dateToday);
+        var el = document.getElementById("last-update-at");
+        if (el) {
+          var d = (at || "").toString().trim();
+          if (d.length >= 10) d = d.substring(0, 10);
+          el.textContent = d || "--";
+        }
+        if (!initialLoadDone) {
+          initialLoadDone = true;
+          loadCurrent();
+          loadCharts();
+          loadToplist();
+        } else if (at && at !== lastUpdateAt) {
+          loadCurrent();
+          loadCharts();
+          loadToplist();
+        }
+        if (at) lastUpdateAt = at;
+      })
+      .catch(function () {
+        if (!initialLoadDone) {
+          initialLoadDone = true;
+          loadCurrent();
+          loadCharts();
+          loadToplist();
+        }
+      });
+  }
+
+  loadLastUpdate();
+  setInterval(loadLastUpdate, 60000);
+})();
+  </script>
+</body>
+</html>

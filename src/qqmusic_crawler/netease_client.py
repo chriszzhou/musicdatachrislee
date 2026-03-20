@@ -378,7 +378,10 @@ class NeteaseMusicClient:
         return result
 
     def fetch_toplist_detail(self, top_id: int, num: int = 100) -> Dict[str, Any]:
-        data = self._get_json("/api/v6/playlist/detail", {"id": str(top_id)})
+        params: Dict[str, Any] = {"id": str(top_id)}
+        if num > 0:
+            params["limit"] = str(min(int(num), 100))
+        data = self._get_json("/api/v6/playlist/detail", params)
         if int(data.get("code") or 0) != 200:
             logger.warning("Netease toplist detail failed, top_id={}, code={}", top_id, data.get("code"))
             return {"songs": []}
@@ -388,7 +391,8 @@ class NeteaseMusicClient:
         tracks = playlist.get("tracks", [])
         if not isinstance(tracks, list):
             tracks = []
-        tracks = tracks[: max(int(num), 0)]
+        want = max(int(num), 0)
+        tracks = tracks[: want] if want else tracks
         songs: List[Dict[str, Any]] = []
         for item in tracks:
             if not isinstance(item, dict):
@@ -412,6 +416,20 @@ class NeteaseMusicClient:
                     "album": {"name": album.get("name")},
                 }
             )
+        # 若需要更多条且接口只返回了少量 tracks，用 trackIds + song/detail 补全前 num 条（如新歌榜 100 首）
+        if want > 0 and len(songs) < want:
+            track_ids = playlist.get("trackIds")
+            if isinstance(track_ids, list) and len(track_ids) > 0:
+                ids_to_fetch = []
+                for t in track_ids[:want]:
+                    if isinstance(t, dict) and "id" in t:
+                        ids_to_fetch.append(int(t["id"]))
+                    elif isinstance(t, (int, float)):
+                        ids_to_fetch.append(int(t))
+                if ids_to_fetch:
+                    extra = self._fetch_song_details_by_ids(ids_to_fetch)
+                    if extra:
+                        songs = extra[:want]
         return {
             "top_id": top_id,
             "top_name": str(playlist.get("name") or "").strip(),
@@ -420,3 +438,90 @@ class NeteaseMusicClient:
             "songs": songs,
             "raw": playlist,
         }
+
+    def _fetch_song_details_by_ids(self, song_ids: List[int]) -> List[Dict[str, Any]]:
+        """根据歌曲 id 列表批量拉取详情，返回与 fetch_toplist_detail 一致的 song 结构。每批最多 100 个 id。"""
+        if not song_ids:
+            return []
+        batch_size = 100
+        all_songs: List[Dict[str, Any]] = []
+        for i in range(0, len(song_ids), batch_size):
+            chunk = song_ids[i : i + batch_size]
+            ids_str = json.dumps(list(chunk))
+            data = self._get_json("/api/song/detail", {"ids": ids_str})
+            if int(data.get("code") or 0) != 200:
+                logger.warning("Netease song/detail failed, code={}", data.get("code"))
+                continue
+            raw_songs = data.get("songs") or []
+            if not isinstance(raw_songs, list):
+                continue
+            for item in raw_songs:
+                if not isinstance(item, dict):
+                    continue
+                artists = item.get("ar", item.get("artists", []))
+                if not isinstance(artists, list):
+                    artists = []
+                singer_list = []
+                for a in artists:
+                    if not isinstance(a, dict):
+                        continue
+                    singer_list.append({"mid": str(a.get("id") or "").strip(), "name": a.get("name")})
+                album = item.get("al") if isinstance(item.get("al"), dict) else {}
+                all_songs.append(
+                    {
+                        "id": item.get("id"),
+                        "mid": str(item.get("id") or "").strip(),
+                        "name": item.get("name"),
+                        "title": item.get("name"),
+                        "singer": singer_list,
+                        "album": {"name": album.get("name", "")},
+                    }
+                )
+        id_to_idx = {sid: i for i, sid in enumerate(song_ids)}
+        all_songs.sort(key=lambda s: id_to_idx.get(s.get("id"), 999999))
+        return all_songs
+
+    def fetch_playlist_tracks(
+        self, playlist_id: int, limit: int = 30, offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """拉取歌单/榜单曲目列表（分页）。支持 limit/offset 获取前 N 条。"""
+        params: Dict[str, Any] = {
+            "id": str(playlist_id),
+            "limit": str(max(1, min(int(limit), 1000))),
+            "offset": str(max(0, int(offset))),
+        }
+        data = self._get_json("/api/playlist/track/all", params)
+        if int(data.get("code") or 0) != 200:
+            logger.warning(
+                "Netease playlist track/all failed, id={}, code={}",
+                playlist_id,
+                data.get("code"),
+            )
+            return []
+        raw_songs = data.get("songs") or data.get("data", [])
+        if not isinstance(raw_songs, list):
+            return []
+        songs: List[Dict[str, Any]] = []
+        for item in raw_songs[: limit if limit > 0 else len(raw_songs)]:
+            if not isinstance(item, dict):
+                continue
+            artists = item.get("ar", item.get("artists", []))
+            if not isinstance(artists, list):
+                artists = []
+            singer_list = []
+            for a in artists:
+                if not isinstance(a, dict):
+                    continue
+                singer_list.append({"mid": str(a.get("id") or "").strip(), "name": a.get("name")})
+            album = item.get("al") if isinstance(item.get("al"), dict) else {}
+            songs.append(
+                {
+                    "id": item.get("id"),
+                    "mid": str(item.get("id") or "").strip(),
+                    "name": item.get("name"),
+                    "title": item.get("name"),
+                    "singer": singer_list,
+                    "album": {"name": album.get("name", "")},
+                }
+            )
+        return songs

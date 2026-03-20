@@ -2,12 +2,8 @@
 
 用于抓取 QQ 音乐公开可访问数据的示例工程，当前支持：
 
-- 按歌手名查 MID（`find-artist`）
-- 单歌手快照抓取（`crawl-track`）
-- 按天/月/年查看变化（`report-changes`）
-- 查询歌手是否有歌曲上榜（`check-artist-toplist`）
-- 网易云同等功能（独立菜单 + 独立数据库）
-- 酷狗同等功能（独立菜单 + 独立数据库）
+- 按歌手名查 MID、单歌手抓取与变化追踪、按日/月/年变化报告、歌手上榜检查（均在 **Web** 内按平台操作）
+- 网易云 / 酷狗同等能力（Web 内切换平台；数据各自独立库）
 
 > 说明：QQ 音乐接口可能变更或增加风控，本项目用于学习接口抓取流程与工程化组织方式。
 
@@ -15,9 +11,11 @@
 
 - Python 3.8+
 
-安装依赖：
+安装依赖（**务必与运行 Web 时用的 Python 是同一个**，例如用 `python3.9 run_web.py` 则用 `python3.9 -m pip`）：
 
 ```bash
+python3.9 -m pip install -e .
+# 或系统默认已是 3.9+ 时：
 pip install -e .
 ```
 
@@ -27,32 +25,57 @@ pip install -e .
 
 ```bash
 cp .env.example .env
+# 可选：歌手名 / 新歌名 / 定时任务等（见模板内说明）
+cp .env.qqmc.example .env.qqmc
 ```
+
+环境文件均放在**仓库根目录**；`config` 会依次加载 `.env`、`.env.qqmc`（后者覆盖同名键）。`.env.qqmc` 已加入 `.gitignore`，适合本机差异配置。
 
 新增平台配置示例（可在 `.env` 调整）：
 
 - `NETEASE_RATE_LIMIT_QPS` / `NETEASE_METRIC_WORKERS` / `NETEASE_METRIC_BATCH_SIZE`
 - `KUGOU_BASE_URL` / `KUGOU_RATE_LIMIT_QPS` / `KUGOU_METRIC_WORKERS` / `KUGOU_METRIC_BATCH_SIZE`
 
+**业务可调（推荐写在 `.env.qqmc`，也可写在 `.env`）** — 详见根目录 **`.env.qqmc.example`**：
+
+- **新歌页**：`QQMC_NEW_SONG_ARTIST`、`QQMC_NEW_SONG_NAME`、`QQMC_NEW_SONG_CHART_START_DATE`、`QQMC_NEW_SONG_CHART_NUM_POINTS`
+- **定时任务**：`QQMC_TOPLIST_ARTIST_NAME`、`QQMC_TOPLIST_SCHEDULE_START_HOUR`、`QQMC_TOPLIST_INTERVAL_MINUTES`、`QQMC_NEW_SONG_UPDATE_INTERVAL_SEC`、`QQMC_CRAWL_TRACK_ARTIST_NAME`、`QQMC_CRAWL_TRACK_INTERVAL_MINUTES`
+- **首页默认**：`QQMC_DEFAULT_TOPSONGS_ARTIST_NAME`（不填则与 `QQMC_TOPLIST_ARTIST_NAME` 相同）
+
+**SQLite 并发**（可选，减轻后台写入与 Web 读库的锁冲突；详见 `sqlite_util.py`）：
+
+- `QQMC_SQLITE_CONNECT_TIMEOUT` — `sqlite3.connect(timeout=…)` 秒数（默认 `30`）
+- `QQMC_SQLITE_BUSY_TIMEOUT_MS` — `PRAGMA busy_timeout` 毫秒（默认 `60000`）；快照库经 SQLAlchemy 打开时也会设置
+
 ## 3. 运行
 
-### 3.0 交互式菜单（推荐）
+日常使用以 **Web 页面** 为入口即可（三平台统一：`http://127.0.0.1:8000/`）。**启动 Web 服务后**，进程内会按设定执行榜单拉取、新歌更新、以及三平台定时抓取（李宇春等），**无需**再跑独立定时脚本。各平台独立 CLI（`main` / `netease_main` / `kugou_main`）已移除。
 
-不想手输命令时可直接运行：
+### 3.0 Web 页面（统一三平台）
+
+本仓库代码在 **`src/qqmusic_crawler/`**。需要两件事：
+
+1. **能找到包**：`src` 须在路径里（`run_web.py` / `PYTHONPATH=src` / `pip install -e .` 均可）。  
+2. **已安装第三方依赖**：`loguru`、`fastapi`、`uvicorn` 等须装进**当前使用的解释器**，否则报 **`No module named 'loguru'`**。用 `python3.9 -m pip install -e .` 即可一次装全。
+
+`run_web.py` 会自动设置 **`PYTHONPATH`**，方便 `--reload` 子进程也能找到 `qqmusic_crawler`；依赖仍需按上一步安装。
+
+**推荐**：在仓库根目录执行。
+
+若系统默认 `python3` 低于 3.9，请用本机已安装的 **3.9+** 解释器显式运行：
 
 ```bash
-python menu.py
+python3.9 run_web.py --reload
 ```
 
-菜单内支持：
+等价于带 `PYTHONPATH=src` 的 uvicorn：
 
-- 查看歌手歌曲信息（自动按歌手总歌曲数计算页数，不需要手输 `song-pages`）
-- 查看变化报告（先选年/月/日，再输入对应日期；输出区间汇总 + 受影响歌曲名/歌手名）
-- 查询歌手是否有歌曲上榜（并写入独立榜单库）
+```bash
+export PYTHONPATH=src
+uvicorn qqmusic_crawler.web_main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### 3.0.1 Web 页面（统一三平台）
-
-启动方式：
+若已 `pip install -e .`，可直接：
 
 ```bash
 uvicorn qqmusic_crawler.web_main:app --host 0.0.0.0 --port 8000 --reload
@@ -77,151 +100,29 @@ Web 页面支持：
 2. 先执行“抓取并追踪”生成快照
 3. 再执行“变化报告”或“当前快照 TOP N”查看结果
 
-### 3.0.2 定时抓取（三平台）
+**开机自启 Web**：例如 systemd 里 `WorkingDirectory` 指向项目根，`ExecStart` 使用你的 `python3.9 …/run_web.py`（勿再引用已删除的 `scheduled_crawl`）。若机器上仍留有旧的 `scheduled_crawl` systemd/cron，可按仓库内 `CANCEL_SCHEDULED_CRAWL_AUTOSTART.md` 清理。
 
-脚本 `scheduled_crawl.py` 会依次对 QQ、网易云、酷狗执行指定歌手的歌曲抓取并追踪，默认歌手为「李宇春」。**默认行为**：进程常驻，每 30 分钟执行一轮，直到手动停止（Ctrl+C 或杀进程）。
+### 3.1 三平台数据目录（与 Web 写入路径一致）
 
-```bash
-# 后台常驻，每 30 分钟执行一轮（推荐）
-nohup python scheduled_crawl.py >> /var/log/scheduled_crawl.log 2>&1 &
+**QQ 音乐**
 
-# 指定间隔（例如每 60 分钟）
-nohup python scheduled_crawl.py --interval 60 >> /var/log/scheduled_crawl.log 2>&1 &
+- 快照库目录：`data/snapshots/`
+- 变化库：`data/qqmusic_changes.db`
+- 榜单库：`data/qqmusic_toplist.db`
 
-# 指定歌手与平台
-python scheduled_crawl.py --artist 李宇春 --platforms qq netease kugou
-
-# 每个平台最多抓 2000 首（上限 2000）
-python scheduled_crawl.py --artist 李宇春 --song-limit 2000
-```
-
-若希望由 cron 每 30 分钟调一次、每次只跑一轮后退出，使用 `--once`：
-
-```bash
-# 手动执行一次
-python scheduled_crawl.py --once
-
-# cron 示例（每 30 分钟执行一次脚本，脚本跑一轮即退出）
-*/30 * * * * cd /path/to/qqmusic-crawler && python scheduled_crawl.py --once >> /var/log/scheduled_crawl.log 2>&1
-```
-
-**开机自启（systemd）**：用 systemd 管理进程，开机自动启动、异常退出会自动重启。
-
-1. 复制并编辑服务文件（把 `PROJECT_DIR` 改成项目实际路径，若用虚拟环境则把 `ExecStart` 里的 `python3` 改成 `.venv/bin/python`）：
-   ```bash
-   mkdir -p ~/.config/systemd/user
-   cp scheduled_crawl.service.example ~/.config/systemd/user/scheduled_crawl.service
-   # 编辑 scheduled_crawl.service，修改 WorkingDirectory 和 ExecStart 中的路径
-   ```
-2. 启用并启动服务：
-   ```bash
-   systemctl --user daemon-reload
-   systemctl --user enable --now scheduled_crawl
-   ```
-3. 若希望**不登录用户也自动运行**（例如无图形界面开机即跑）：
-   ```bash
-   loginctl enable-linger $USER
-   ```
-4. 查看状态与日志：
-   ```bash
-   systemctl --user status scheduled_crawl
-   journalctl --user -u scheduled_crawl -f
-   ```
-
-将 `/path/to/qqmusic-crawler` 换成实际项目路径；如需虚拟环境，在命令前加上该环境的 `python` 路径。
-
-网易云独立菜单：
-
-```bash
-python netease_menu.py
-```
-
-网易云命令行入口：
-
-```bash
-python -m qqmusic_crawler.netease_main --help
-```
-
-酷狗独立菜单：
-
-```bash
-python kugou_menu.py
-```
-
-酷狗命令行入口：
-
-```bash
-python -m qqmusic_crawler.kugou_main --help
-```
-
-网易云默认数据路径（与 QQ 隔离）：
+**网易云**（与 QQ 隔离）
 
 - 快照库目录：`data/netease_snapshots/`
 - 变化库：`data/netease_changes.db`
 - 榜单库：`data/netease_toplist.db`
 
-酷狗默认数据路径（与 QQ/网易云隔离）：
+**酷狗**（与 QQ/网易云隔离）
 
 - 快照库目录：`data/kugou_snapshots/`
 - 变化库：`data/kugou_changes.db`
 - 榜单库：`data/kugou_toplist.db`
 
-### 3.1 先按歌手名查 MID
-
-```bash
-python -m qqmusic_crawler.main find-artist --name 陈奕迅 --max-pages 8
-```
-
-### 3.2 单歌手快照抓取 + 变化追踪（推荐）
-
-每次执行都会创建一个新的快照库，并写入变化库（仅有变化才记录）。
-执行 `crawl-track` 时会自动抓取歌手粉丝数并写入快照库 `artists.fans`。
-
-```bash
-# 直接用歌手名
-python -m qqmusic_crawler.main crawl-track --artist-name 陈奕迅 --song-pages 2
-
-# 或者用歌手 MID
-python -m qqmusic_crawler.main crawl-track --artist-mid 003Nz2So3XXYek --song-pages 2
-```
-
-默认路径：
-
-- 快照库目录：`data/snapshots/`
-- 变化库：`data/qqmusic_changes.db`
-
-### 3.3 查看某天变化报告
-
-```bash
-# 默认今天
-python -m qqmusic_crawler.main report-changes
-
-# 指定日期
-python -m qqmusic_crawler.main report-changes --date 2026-02-26
-
-# 指定月份
-python -m qqmusic_crawler.main report-changes --month 2026-02
-
-# 指定年份
-python -m qqmusic_crawler.main report-changes --year 2026
-
-# 只看某个歌手
-python -m qqmusic_crawler.main report-changes --date 2026-02-26 --artist-mid 003Nz2So3XXYek
-```
-
-### 3.4 查询某个歌手是否有歌曲上榜
-
-```bash
-# 直接用歌手名
-python -m qqmusic_crawler.main check-artist-toplist --artist-name 李宇春 --top-n 100
-
-# 用歌手 MID，并限制输出条数
-python -m qqmusic_crawler.main check-artist-toplist --artist-mid 002ZOuVm3Qn20Y --top-n 100 --limit 100
-```
-
-默认写入独立榜单库：`data/qqmusic_toplist.db`，表名 `artist_toplist_hits`。  
-去重键：`artist_mid + top_id + top_period + song_mid`。  
-时间字段：`first_seen_at`、`last_seen_at`。
+QQ 榜单库表名 `artist_toplist_hits`；去重键：`artist_mid + top_id + top_period + song_mid`；时间字段含 `first_seen_at`、`last_seen_at`。
 
 ## 4. 数据库表
 

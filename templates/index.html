@@ -49,6 +49,8 @@
       color: #1e429f;
       font-size: 13px;
     }
+    .nav-links a { color: var(--primary); text-decoration: none; }
+    .nav-links a:hover { text-decoration: underline; }
     .platform-select {
       margin-top: 8px;
       margin-left: 4px;
@@ -243,7 +245,8 @@
   <div class="page">
   <div class="header-card">
     <h1 class="title">数据网站</h1>
-    <div class="subtitle">支持 QQ / 网易云 / 酷狗 的歌手搜索、抓取追踪、变化报告、上榜检查与 TOP N 查询</div>
+    <div class="subtitle">支持 QQ / 网易云 / 酷狗 的追踪、变化报告、榜单数据与 TOP N 查询</div>
+    <span class="nav-links" style="margin-right: 12px;"><a href="/new-song">新歌「{{ new_song_name }}」</a></span>
     <label for="platform-select" class="subtitle">当前平台：</label>
     <select id="platform-select" class="platform-select" aria-label="当前平台" onchange="window.location.href='/?platform='+encodeURIComponent(this.value)">
       {% for p in platforms %}
@@ -260,20 +263,7 @@
   {% endif %}
 
   <div class="block">
-    <h3>1) 歌手搜索</h3>
-    <form method="post" action="/action/search-artist" class="row js-progress-form" data-progress-label="歌手搜索中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="text" name="artist_keyword" placeholder="输入歌手名关键词" value="{{ form.get('artist_keyword', '') }}" />
-      <button type="submit">搜索</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
-    </div>
-  </div>
-
-  <div class="block">
-    <h3>2) 歌曲搜索</h3>
+    <h3>1) 歌曲搜索</h3>
     <p class="subtitle">从当前平台最新一次快照中搜索，匹配歌曲名或专辑名包含关键词的结果</p>
     <form method="post" action="/action/search-songs" class="row js-progress-form" data-progress-label="歌曲搜索中">
       <input type="hidden" name="platform" value="{{ platform }}" />
@@ -287,37 +277,13 @@
   </div>
 
   <div class="block">
-    <h3>3) 获取歌曲列表</h3>
-    <form method="post" action="/action/crawl-track" id="crawl-track-form" class="row js-progress-form js-async-crawl-form" data-progress-label="获取歌曲列表中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="text" name="artist_name" placeholder="输入歌手名" value="{{ form.get('artist_name', '') }}" />
-      <select name="song_count" aria-label="歌曲数目">
-        <option value="" {% if form.get('song_count', '') == '' %}selected{% endif %}>歌曲数目(不填获取所有)</option>
-        <option value="100" {% if form.get('song_count', '') == '100' %}selected{% endif %}>100</option>
-        <option value="200" {% if form.get('song_count', '') == '200' %}selected{% endif %}>200</option>
-        <option value="300" {% if form.get('song_count', '') == '300' %}selected{% endif %}>300</option>
-        <option value="400" {% if form.get('song_count', '') == '400' %}selected{% endif %}>400</option>
-        <option value="500" {% if form.get('song_count', '') == '500' %}selected{% endif %}>500</option>
-        <option value="1000" {% if form.get('song_count', '') == '1000' %}selected{% endif %}>1000</option>
-        <option value="2000" {% if form.get('song_count', '') == '2000' %}selected{% endif %}>2000</option>
-      </select>
-      <button type="submit">开始获取</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
-    </div>
-    <div id="crawl-track-live-result" style="display:none; margin-top: 10px;"></div>
-  </div>
-
-  <div class="block">
-    <h3>4) 歌手数据变化</h3>
+    <h3>2) 歌手数据变化</h3>
     <form method="post" action="/action/report-changes" class="row js-progress-form" data-progress-label="生成变化报告中">
       <input type="hidden" name="platform" value="{{ platform }}" />
       <select id="report-mode" name="report_mode">
-        <option value="year" {% if form.get('report_mode', 'year') == 'year' %}selected{% endif %}>年</option>
-        <option value="month" {% if form.get('report_mode', '') == 'month' %}selected{% endif %}>月</option>
-        <option value="day" {% if form.get('report_mode', '') == 'day' %}selected{% endif %}>日</option>
+        <option value="year" {% if form.get('report_mode', 'day') == 'year' %}selected{% endif %}>年</option>
+        <option value="month" {% if form.get('report_mode', 'day') == 'month' %}selected{% endif %}>月</option>
+        <option value="day" {% if form.get('report_mode', 'day') == 'day' %}selected{% endif %}>日</option>
       </select>
       <input type="hidden" id="report-value-hidden" name="report_value" value="{{ form.get('report_value', '') }}" />
       <input
@@ -333,7 +299,7 @@
         value="{% if form.get('report_mode', '') == 'month' %}{{ form.get('report_value', '') }}{% endif %}"
         style="display:none;"
       />
-      <select id="report-value-year" style="display:none;" data-initial-year="{{ form.get('report_value', '') if form.get('report_mode', '') == 'year' else '' }}"></select>
+      <select id="report-value-year" style="display:none;" data-initial-year="{{ form.get('report_value', '') if form.get('report_mode', 'day') == 'year' else '' }}"></select>
       <button type="submit">生成报告</button>
     </form>
     <div class="progress-wrap js-progress-wrap">
@@ -343,12 +309,12 @@
   </div>
 
   <div class="block">
-    <h3>5) 歌手上榜检查</h3>
-    <form method="post" action="/action/check-toplist" class="row js-progress-form" data-progress-label="上榜检查中">
+    <h3>3) 歌曲TOP N</h3>
+    <form method="post" action="/action/top-songs" class="row js-progress-form" data-progress-label="查询TOP N中">
       <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="hidden" name="toplist_top_n" value="300" />
-      <input type="text" name="toplist_artist_name" placeholder="输入歌手名" value="{{ form.get('toplist_artist_name', '') }}" />
-      <button type="submit">执行检查</button>
+      <input type="hidden" name="topsongs_artist_name" value="{{ default_topsongs_artist }}" />
+      <input type="number" name="topsongs_n" placeholder="N (默认15)" value="{{ form.get('topsongs_n', '') }}" />
+      <button type="submit">查询</button>
     </form>
     <div class="progress-wrap js-progress-wrap">
       <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
@@ -357,16 +323,13 @@
   </div>
 
   <div class="block">
-    <h3>6) 歌曲TOP N</h3>
-    <form method="post" action="/action/top-songs" class="row js-progress-form" data-progress-label="查询TOP N中">
-      <input type="hidden" name="platform" value="{{ platform }}" />
-      <input type="text" name="topsongs_artist_name" placeholder="输入歌手名" value="{{ form.get('topsongs_artist_name', '') }}" />
-      <input type="number" name="topsongs_n" placeholder="N (默认15)" value="{{ form.get('topsongs_n', '') }}" />
-      <button type="submit">查询</button>
-    </form>
-    <div class="progress-wrap js-progress-wrap">
-      <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
-      <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
+    <h3>榜单数据</h3>
+    <p class="subtitle">仅显示今日（北京时间）上榜记录</p>
+    <div id="toplist-history-wrap">
+      <div class="progress-text js-toplist-loading">加载中...</div>
+      <div id="toplist-history-list" style="display:none;"></div>
+      <div id="toplist-history-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
+      <div id="toplist-history-err" class="err" style="display:none;"></div>
     </div>
   </div>
 
@@ -402,32 +365,6 @@
     </div>
   </div>
 
-  {% if result_type == "search-artist" %}
-  <div class="block">
-    <h3>搜索结果</h3>
-    {% if result.get("ok") and result.get("items") %}
-      <div>匹配数量：{{ result.get("count") }}</div>
-      <table>
-        <thead>
-          <tr>
-            <th>歌手名</th><th>粉丝量</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in result.get("items", []) %}
-          <tr>
-            <td>{{ item.get("name") }}</td>
-            <td>{{ item.get("fans") if item.get("fans") is not none else "-" }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <div>无匹配结果。</div>
-    {% endif %}
-  </div>
-  {% endif %}
-
   {% if result_type == "search-songs" %}
   <div class="block">
     <h3>歌曲搜索结果</h3>
@@ -459,84 +396,6 @@
       {% endif %}
     {% else %}
       <div class="err">{{ result.get("error", "搜索失败") }}</div>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  {% if result_type == "crawl-track" %}
-  <div class="block">
-    <h3>获取结果</h3>
-    {% if result.get("ok") %}
-      <div><strong>本次歌曲指标变化字段</strong></div>
-      {% if result.get("metric_change_fields") %}
-      <ul>
-        {% for row in result.get("metric_change_fields", []) %}
-        <li>{{ row.get("metric") }}: 变化条数={{ row.get("count") }}, 总增量={{ row.get("delta_sum") }}</li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <div>无</div>
-      {% endif %}
-
-      <div><strong>本次歌手指标变化字段</strong></div>
-      {% if result.get("artist_metric_change_fields") %}
-      <ul>
-        {% for row in result.get("artist_metric_change_fields", []) %}
-        <li>{{ row.get("metric") }}: 变化条数={{ row.get("count") }}, 总增量={{ row.get("delta_sum") }}</li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <div>无</div>
-      {% endif %}
-
-      <div><strong>本次歌曲指标变化明细</strong></div>
-      {% if result.get("metric_change_rows") %}
-      <table>
-        <thead>
-          <tr>
-            <th>歌曲名</th><th>song_mid</th><th>变化字段</th><th>变化量</th><th>之前值</th><th>现在值</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in result.get("metric_change_rows", []) %}
-          <tr>
-            <td>{{ row.get("song_name") }}</td>
-            <td>{{ row.get("song_mid") }}</td>
-            <td>{{ row.get("metric") }}</td>
-            <td>{{ "%+d"|format(row.get("delta") or 0) }}</td>
-            <td>{{ row.get("old_value") }}</td>
-            <td>{{ row.get("new_value") }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div>无</div>
-      {% endif %}
-
-      <div><strong>本次歌手指标变化明细</strong></div>
-      {% if result.get("artist_metric_change_rows") %}
-      <table>
-        <thead>
-          <tr>
-            <th>歌手名</th><th>变化字段</th><th>变化量</th><th>之前值</th><th>现在值</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in result.get("artist_metric_change_rows", []) %}
-          <tr>
-            <td>{{ row.get("artist_name") }}</td>
-            <td>{{ row.get("metric") }}</td>
-            <td>{{ "%+d"|format(row.get("delta") or 0) }}</td>
-            <td>{{ row.get("old_value") }}</td>
-            <td>{{ row.get("new_value") }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div>无</div>
-      {% endif %}
     {% endif %}
   </div>
   {% endif %}
@@ -608,7 +467,7 @@
       <div class="row" style="margin-top: 12px;">
         <button type="button" id="btn-report-chart" class="js-btn-report-chart"
           data-platform="{{ platform }}"
-          data-report-mode="{{ form.get('report_mode', 'year') }}"
+          data-report-mode="{{ form.get('report_mode', 'day') }}"
           data-report-value="{{ form.get('report_value', '') }}"
           data-report-artist-mid="{{ form.get('report_artist_mid', '') }}"
           onclick="typeof window.showReportChart === 'function' && window.showReportChart(this);"
@@ -636,33 +495,6 @@
           <canvas id="report-chart-canvas-fans" height="240"></canvas>
         </div>
       </div>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  {% if result_type == "check-toplist" %}
-  <div class="block">
-    <h3>上榜结果</h3>
-    {% if result.get("ok") %}
-      {% if result.get("rows") %}
-      <table>
-        <thead>
-          <tr>
-            <th>榜单</th><th>排名</th><th>期次/更新时间</th><th>歌曲</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in result.get("rows", []) %}
-          <tr>
-            <td>{{ row.get("top_name") }}({{ row.get("top_id") }})</td>
-            <td>#{{ row.get("rank") }}</td>
-            <td>{{ row.get("top_period") or row.get("top_update_time") }}</td>
-            <td>{{ row.get("song_name") }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% endif %}
     {% endif %}
   </div>
   {% endif %}
@@ -970,127 +802,8 @@
           .replace(/'/g, "&#039;");
       }
 
-      function renderCrawlResult(result, errorText) {
-        var box = document.getElementById("crawl-track-live-result");
-        if (!box) return;
-        box.style.display = "block";
-        if (errorText) {
-          box.innerHTML = '<div class="err">' + escapeHtml(errorText) + '</div>';
-          return;
-        }
-        if (!result || !result.ok) {
-          box.innerHTML = '<div class="err">获取失败</div>';
-          return;
-        }
-
-        var rows = Array.isArray(result.metric_change_rows) ? result.metric_change_rows : [];
-        var topRows = rows.slice(0, 50).map(function (row) {
-          return (
-            "<tr>" +
-            "<td>" + escapeHtml(row.song_name) + "</td>" +
-            "<td>" + escapeHtml(row.metric) + "</td>" +
-            "<td>" + (Number(row.delta || 0) > 0 ? "+" : "") + escapeHtml(row.delta) + "</td>" +
-            "<td>" + escapeHtml(row.new_value) + "</td>" +
-            "</tr>"
-          );
-        }).join("");
-
-        box.innerHTML =
-          '<div class="msg">获取完成</div>' +
-          (topRows
-            ? '<table><thead><tr><th>歌曲名</th><th>变化字段</th><th>变化量</th><th>现在值</th></tr></thead><tbody>' + topRows + "</tbody></table>"
-            : "<div>本次无歌曲指标变化明细。</div>");
-      }
-
-      function handleAsyncCrawl(form) {
-        form.addEventListener("submit", function (event) {
-          event.preventDefault();
-          if (isSubmitting) {
-            return false;
-          }
-          setGlobalSubmitting(true);
-
-          var block = form.closest(".block");
-          var wrap = block ? block.querySelector(".js-progress-wrap") : null;
-          var fill = block ? block.querySelector(".js-progress-fill") : null;
-          var text = block ? block.querySelector(".js-progress-text") : null;
-          var liveBox = document.getElementById("crawl-track-live-result");
-          if (liveBox) {
-            liveBox.style.display = "none";
-            liveBox.innerHTML = "";
-          }
-          if (wrap && fill && text) {
-            wrap.style.display = "block";
-            fill.style.width = "1%";
-            text.textContent = "正在创建任务... 1% (0秒)";
-          }
-
-          var platform = form.querySelector("input[name='platform']").value;
-          var artistName = form.querySelector("input[name='artist_name']").value;
-          var songCountEl = form.querySelector("[name='song_count']");
-          var songCount = songCountEl ? songCountEl.value : "";
-          var startedAt = Date.now();
-
-          fetch("/api/crawl-track/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              platform: platform,
-              artist_name: artistName,
-              song_limit: songCount || null
-            })
-          })
-            .then(function (resp) { return resp.json(); })
-            .then(function (data) {
-              if (!data.ok || !data.job_id) {
-                throw new Error(data.error || "任务创建失败");
-              }
-              var jobId = data.job_id;
-              var timer = setInterval(function () {
-                fetch("/api/crawl-track/progress/" + encodeURIComponent(jobId))
-                  .then(function (resp) { return resp.json(); })
-                  .then(function (state) {
-                    if (!state.ok) {
-                      throw new Error(state.error || "进度查询失败");
-                    }
-                    var pct = Math.max(1, Math.min(100, Number(state.progress_pct || 0)));
-                    var elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-                    if (fill) {
-                      fill.style.width = pct + "%";
-                    }
-                    if (text) {
-                      text.textContent = (state.message || "处理中") + "... " + pct + "% (" + elapsedSec + "秒)";
-                    }
-                    if (state.status === "done") {
-                      clearInterval(timer);
-                      renderCrawlResult(state.result || {}, "");
-                      setGlobalSubmitting(false);
-                    } else if (state.status === "error") {
-                      clearInterval(timer);
-                      renderCrawlResult(null, state.error || state.message || "获取失败");
-                      setGlobalSubmitting(false);
-                    }
-                  })
-                  .catch(function (err) {
-                    clearInterval(timer);
-                    renderCrawlResult(null, err && err.message ? err.message : "进度查询失败");
-                    setGlobalSubmitting(false);
-                  });
-              }, 1000);
-            })
-            .catch(function (err) {
-              renderCrawlResult(null, err && err.message ? err.message : "任务创建失败");
-              setGlobalSubmitting(false);
-            });
-        });
-      }
-
       var forms = document.querySelectorAll(".js-progress-form");
       forms.forEach(function (form) {
-        if (form.classList.contains("js-async-crawl-form")) {
-          handleAsyncCrawl(form);
-          return;
-        }
         form.addEventListener("submit", function () {
           if (isSubmitting) {
             return false;
@@ -1208,12 +921,74 @@
         });
 
         if (!modeEl.value) {
-          modeEl.value = "year";
+          modeEl.value = "day";
         }
         buildYearOptions(new Date());
         modeEl.addEventListener("change", syncInputByMode);
         syncInputByMode();
       })();
+
+      function loadToplistHistory(showLoading) {
+        var loading = document.querySelector(".js-toplist-loading");
+        var listEl = document.getElementById("toplist-history-list");
+        var empty = document.getElementById("toplist-history-empty");
+        var errEl = document.getElementById("toplist-history-err");
+        if (!listEl) return;
+        if (showLoading !== false && loading) loading.style.display = "block";
+        listEl.style.display = "none";
+        listEl.innerHTML = "";
+        if (empty) empty.style.display = "none";
+        if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+        fetch("/api/toplist-check-history?limit=100&_=" + Date.now())
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (loading) loading.style.display = "none";
+            if (!data.ok || !Array.isArray(data.runs)) {
+              if (errEl) { errEl.textContent = data.error || "加载失败"; errEl.style.display = "block"; }
+              return;
+            }
+            var runs = data.runs;
+            if (runs.length === 0) {
+              if (empty) empty.style.display = "block";
+              return;
+            }
+            function esc(s) {
+              return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+            }
+            var html = "";
+            runs.forEach(function (run) {
+              var hasAny = (run.results || []).some(function (res) { return res.rows && res.rows.length > 0; });
+              if (!hasAny) return;
+              html += "<div class=\"toplist-run-block\" style=\"margin-bottom: 24px;\">";
+              html += "<div class=\"subtitle\" style=\"margin-bottom: 6px;\">" + esc(run.run_at) + " 北京时间</div>";
+              html += "<table class=\"toplist-unified-table\"><thead><tr><th>平台</th><th>榜单</th><th>排名</th><th>歌曲</th><th>日期</th></tr></thead><tbody>";
+              (run.results || []).forEach(function (res) {
+                if (!res.rows || res.rows.length === 0) return;
+                var platformName = esc(res.platform_name || res.platform || "");
+                res.rows.forEach(function (row) {
+                  var topName = esc(row.top_name || row.top_id || "-");
+                  var rank = row.rank != null ? row.rank : "-";
+                  var songName = esc(row.song_name || "-");
+                  var dateStr = (row.last_seen_at || row.top_update_time || "").toString().trim();
+                  if (dateStr.length >= 10) dateStr = dateStr.substring(0, 10);
+                  if (!dateStr) dateStr = "-";
+                  html += "<tr><td>" + platformName + "</td><td>" + topName + "</td><td>#" + rank + "</td><td>" + songName + "</td><td>" + esc(dateStr) + "</td></tr>";
+                });
+              });
+              html += "</tbody></table></div>";
+            });
+            if (html) {
+              listEl.innerHTML = html;
+              listEl.style.display = "block";
+            } else {
+              if (empty) empty.style.display = "block";
+            }
+          })
+          .catch(function () {
+            if (loading) loading.style.display = "none";
+            if (errEl) { errEl.textContent = "请求失败"; errEl.style.display = "block"; }
+          });
+      }
 
       function loadMilestoneLogs(showLoading) {
         var loading = document.querySelector(".js-milestone-loading");
@@ -1275,8 +1050,9 @@
             if (errEl) { errEl.textContent = "请求失败"; errEl.style.display = "block"; }
           });
       }
+      loadToplistHistory(true);
       loadMilestoneLogs(true);
-      setInterval(function () { loadMilestoneLogs(false); }, 60 * 1000);
+      setInterval(function () { loadToplistHistory(false); loadMilestoneLogs(false); }, 60 * 1000);
 
       (function () {
         var btn = document.getElementById("milestone-remove-outliers-btn");

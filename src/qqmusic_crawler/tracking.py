@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+
+from .sqlite_util import connect_sqlite
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -77,7 +79,7 @@ def _parse_count_value(value: object) -> int:
 
 def _read_artist_songs(db_file: Path, artist_mid: str) -> Dict[str, Dict[str, object]]:
     songs: Dict[str, Dict[str, object]] = {}
-    conn = sqlite3.connect(str(db_file))
+    conn = connect_sqlite(db_file)
     try:
         cur = conn.cursor()
         cur.execute(
@@ -100,7 +102,7 @@ def _read_artist_songs(db_file: Path, artist_mid: str) -> Dict[str, Dict[str, ob
 
 
 def _read_artist_profile(db_file: Path, artist_mid: str) -> Dict[str, object]:
-    conn = sqlite3.connect(str(db_file))
+    conn = connect_sqlite(db_file)
     try:
         cur = conn.cursor()
         cur.execute(
@@ -349,6 +351,28 @@ def _insert_song_change_rows(
     return len(payload)
 
 
+def insert_metric_changes_for_song(
+    changes_db_file: Path,
+    run_at: str,
+    artist_mid: str,
+    song_mid: str,
+    song_name: str,
+    snapshot_db: str,
+    metrics: Iterable[Tuple[str, int, int]],
+) -> int:
+    """写入单首歌曲的 metric 变化记录（用于新歌页定时更新）。metrics: [(metric_name, old_value, new_value), ...]。"""
+    rows = [
+        (song_mid, song_name, name, old_v or 0, new_v or 0, (new_v or 0) - (old_v or 0))
+        for name, old_v, new_v in metrics
+    ]
+    conn = connect_sqlite(changes_db_file)
+    try:
+        _ensure_changes_tables(conn)
+        return _insert_metric_change_rows(conn, run_at, artist_mid, snapshot_db, rows)
+    finally:
+        conn.close()
+
+
 def _insert_metric_change_rows(
     conn: sqlite3.Connection,
     run_at: str,
@@ -480,7 +504,7 @@ def track_changes_for_artist(
         )
 
     changes_db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(changes_db_file))
+    conn = connect_sqlite(changes_db_file)
     try:
         _ensure_changes_tables(conn)
         metric_changes_count = _insert_metric_change_rows(
@@ -538,8 +562,7 @@ def report_changes(
         limit = 200
 
     changes_db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(changes_db_file))
-    conn.row_factory = sqlite3.Row
+    conn = connect_sqlite(changes_db_file, row_factory=sqlite3.Row)
     try:
         _ensure_changes_tables(conn)
         month_keys_metric = _report_month_keys(
