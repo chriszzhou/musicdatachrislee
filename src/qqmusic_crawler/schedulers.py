@@ -91,18 +91,38 @@ def _new_song_scheduler_loop() -> None:
     global NEW_SONG_LAST_UPDATE_AT
     root = _root()
     interval_sec = NEW_SONG_UPDATE_INTERVAL_SEC
+    retry_sleep_seconds = (2, 5, 10)
     while True:
         time.sleep(interval_sec)
         for platform in SUPPORTED_PLATFORMS:
-            try:
-                update_new_song_one_platform(platform, base_dir=root)
-            except Exception as e:
-                logger.warning(
-                    "新歌页定时更新 {} 失败: {}",
-                    platform,
-                    e,
-                    exc_info=True,
-                )
+            ok = False
+            for idx, sleep_sec in enumerate(retry_sleep_seconds, start=1):
+                try:
+                    update_new_song_one_platform(platform, base_dir=root)
+                    ok = True
+                    break
+                except Exception as e:
+                    is_last = idx == len(retry_sleep_seconds)
+                    if is_last:
+                        logger.warning(
+                            "新歌页定时更新 {} 失败(已重试{}次): {}",
+                            platform,
+                            len(retry_sleep_seconds),
+                            e,
+                            exc_info=True,
+                        )
+                    else:
+                        logger.warning(
+                            "新歌页定时更新 {} 失败(第{}/{}次): {}，{}秒后重试",
+                            platform,
+                            idx,
+                            len(retry_sleep_seconds),
+                            e,
+                            sleep_sec,
+                        )
+                        time.sleep(sleep_sec)
+            if not ok:
+                continue
         with NEW_SONG_LAST_UPDATE_LOCK:
             NEW_SONG_LAST_UPDATE_AT = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 

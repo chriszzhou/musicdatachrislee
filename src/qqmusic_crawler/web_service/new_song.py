@@ -379,7 +379,9 @@ def get_new_song_chart_data(
 def get_new_song_toplist_rows(base_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
     """新歌页用：三平台榜单中「春雨里」的上榜记录（从各 toplist 库查）。同一榜单同一天只保留最新一条（按 last_seen_at 取最大）。"""
     base_dir = (base_dir or Path(".")).resolve()
-    today_bj = datetime.now(BEIJING_TZ).date()
+    now_bj = datetime.now(BEIJING_TZ)
+    today_bj = now_bj.date()
+    last_seen_since = now_bj.strftime("%Y-%m-%d") + " 00:00:00"
     result: List[Dict[str, Any]] = []
     for platform in SUPPORTED_PLATFORMS:
         meta = get_platform_meta(platform)
@@ -387,7 +389,7 @@ def get_new_song_toplist_rows(base_dir: Optional[Path] = None) -> List[Dict[str,
         artist_mid = get_artist_mid_from_toplist_db(db_file, NEW_SONG_ARTIST)
         if not artist_mid:
             continue
-        rows = query_artist_toplist_hits_since(db_file, artist_mid, "2000-01-01 00:00:00", limit=500)
+        rows = query_artist_toplist_hits_since(db_file, artist_mid, last_seen_since, limit=500)
         rows_fresh, _ = filter_toplist_rows_for_today(list(rows), today_bj)
         song_rows = [
             r

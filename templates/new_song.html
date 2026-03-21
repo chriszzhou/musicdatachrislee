@@ -232,7 +232,6 @@
   <div class="page">
     <div class="header-card">
       <h1 class="title">新歌 - {{ new_song_name }}</h1>
-      <p class="subtitle">数据{% if new_song_update_interval_sec >= 60 and new_song_update_interval_sec % 60 == 0 %}约每 {{ new_song_update_interval_sec // 60 }} 分钟{% else %}约每 {{ new_song_update_interval_sec }} 秒{% endif %}从三平台拉取并写入各平台最新快照</p>
       <p class="subtitle" id="last-update-line"><span id="last-update-at">--</span></p>
       <div class="header-actions">
         <div class="nav-links">
@@ -256,7 +255,6 @@
 
     <div class="block">
       <h3>二、收藏数曲线（三图）</h3>
-      <p class="subtitle">从开始统计（3.16）到当前时间，均匀取约 10 个时间点，Y 轴为各时刻收藏数</p>
       <div class="charts-row">
         <div id="chart-qq" class="chart-wrap"><div class="chart-title">QQ音乐</div><canvas id="canvas-qq"></canvas></div>
         <div id="chart-netease" class="chart-wrap"><div class="chart-title">网易云音乐</div><canvas id="canvas-netease"></canvas></div>
@@ -266,7 +264,6 @@
 
     <div class="block">
       <h3>三、榜单数据</h3>
-      <p class="subtitle">来自各平台 toplist 库中「{{ new_song_name }}」的上榜记录</p>
       <div id="toplist-loading" class="subtitle">加载中...</div>
       <div id="toplist-err" class="err" style="display:none;"></div>
       <div id="toplist-grid" class="milestone-grid" style="display:none;"></div>
@@ -347,13 +344,11 @@
         var platforms = data.platforms || {};
         var order = ["qq", "netease", "kugou"];
         var html = "";
-        var snapshotParts = [];
         order.forEach(function (p) {
           var v = platforms[p];
           if (!v) return;
           if (v.ok) {
             html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? v.favorite_count : "-") + "</td><td>" + (v.comment_count != null ? v.comment_count : "-") + "</td></tr>";
-            if (v.snapshot_at) snapshotParts.push((v.platform_name || p) + " " + v.snapshot_at);
           } else {
             html += "<tr><td>" + p + "</td><td colspan=\"2\" class=\"err\">" + (v.error || "无数据") + "</td></tr>";
           }
@@ -362,8 +357,8 @@
         table.style.display = "table";
         var hint = document.getElementById("current-snapshot-hint");
         if (hint) {
-          hint.textContent = snapshotParts.length ? "数据来自各平台最新快照（" + snapshotParts.join("；") + " 北京时间）" : "";
-          hint.style.display = snapshotParts.length ? "block" : "none";
+          hint.textContent = "";
+          hint.style.display = "none";
         }
       })
       .catch(function (e) {
@@ -515,6 +510,30 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
     }
+    function isWeeklyToplistRow(row) {
+      var topName = String((row && row.top_name) || "");
+      var topPeriod = String((row && row.top_period) || "").trim();
+      var s = topName + " " + topPeriod;
+      if (s.indexOf("每周") >= 0) return true;
+      if (/^20\d{2}_\d{1,2}$/.test(topPeriod)) return true;
+      return /周榜|周刊|周报|一周|week|weekly|7天|七日/i.test(s);
+    }
+    function formatToplistName(row) {
+      var name = String((row && row.top_name) || "").trim() || "-";
+      return isWeeklyToplistRow(row) ? (name + " · 【周榜】") : name;
+    }
+    function sortToplistRows(rows) {
+      return (rows || []).slice().sort(function (a, b) {
+        var wa = isWeeklyToplistRow(a) ? 1 : 0;
+        var wb = isWeeklyToplistRow(b) ? 1 : 0;
+        if (wa !== wb) return wa - wb; // 日榜在前，周榜在后
+        var na = String((a && a.top_name) || "");
+        var nb = String((b && b.top_name) || "");
+        var c = na.localeCompare(nb, "zh-CN");
+        if (c !== 0) return c;
+        return (parseInt(a && a.rank, 10) || 999999) - (parseInt(b && b.rank, 10) || 999999);
+      });
+    }
     fetch("/api/new-song/toplist?_=" + Date.now())
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -539,7 +558,7 @@
         var html = "";
         order.forEach(function (p) {
           var item = byPlatform[p.key];
-          var rows = item && Array.isArray(item.rows) ? item.rows : [];
+          var rows = item && Array.isArray(item.rows) ? sortToplistRows(item.rows) : [];
           html += "<div class=\"milestone-card " + p.cls + "\">";
           html += "<div class=\"milestone-card-head\">" + esc((item && item.platform_name) || p.title) + "</div>";
           html += "<div class=\"milestone-card-body\">";
@@ -548,7 +567,7 @@
           } else {
             html += "<table class=\"milestone-table\"><thead><tr><th>榜单</th><th>排名</th><th>歌曲</th></tr></thead><tbody>";
             rows.forEach(function (row) {
-              html += "<tr><td>" + esc((row.top_name || "-") + ((row.top_period || "").trim() ? " · " + row.top_period : "")) + "</td><td>#"
+              html += "<tr><td>" + esc(formatToplistName(row)) + "</td><td>#"
                 + esc(String(row.rank != null ? row.rank : "-")) + "</td><td>" + esc(row.song_name || "-") + "</td></tr>";
             });
             html += "</tbody></table>";
@@ -587,12 +606,13 @@
           initialLoadDone = true;
           loadCurrent();
           loadCharts();
-          loadToplist();
         } else if (at && at !== lastUpdateAt) {
           loadCurrent();
           loadCharts();
-          loadToplist();
         }
+        // 榜单抓取由独立定时线程驱动，不与 new-song last_update 完全同步；
+        // 每次轮询都刷新一次榜单，避免错过榜单写库后的可见时机。
+        loadToplist();
         if (at) lastUpdateAt = at;
       })
       .catch(function () {

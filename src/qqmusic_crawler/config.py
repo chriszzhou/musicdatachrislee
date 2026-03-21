@@ -57,7 +57,7 @@ class Settings(BaseSettings):
         default=20, alias="QQMC_TOPLIST_INTERVAL_MINUTES", ge=1, le=60
     )
     qqmc_new_song_update_interval_sec: int = Field(
-        default=60, alias="QQMC_NEW_SONG_UPDATE_INTERVAL_SEC", ge=10
+        default=300, alias="QQMC_NEW_SONG_UPDATE_INTERVAL_SEC", ge=10
     )
     qqmc_crawl_track_artist_name: str = Field(
         default="李宇春", alias="QQMC_CRAWL_TRACK_ARTIST_NAME"

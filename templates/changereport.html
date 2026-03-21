@@ -570,7 +570,6 @@
   <div class="page">
   <div class="header-card">
     <h1 class="title">变化报告</h1>
-    <div class="subtitle">三平台歌曲 / 粉丝指标变化（默认歌手 {{ default_topsongs_artist }}）</div>
     <div class="header-actions">
       <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
     </div>
@@ -619,8 +618,6 @@
       <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
       <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
     </div>
-
-    <p class="subtitle" style="margin-top: 14px;">{{ report_value }} · {{ default_topsongs_artist }}</p>
 
     <div class="report-platform-grid">
     {% for plat in platforms %}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>数据网站</title>
+  <title>ChrisLee音乐地图</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>
     :root {
@@ -669,8 +669,7 @@
   <div id="global-lock" class="global-lock"></div>
   <div class="page">
   <div class="header-card">
-    <h1 class="title">数据网站</h1>
-    <div class="subtitle">支持 QQ / 网易云 / 酷狗 的追踪、变化报告、榜单数据与 TOP N 查询</div>
+    <h1 class="title">ChrisLee音乐地图</h1>
     <div class="header-actions">
       <span class="nav-links"><a href="/new-song">新歌「{{ new_song_name }}」</a></span>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">切换为浅色</button>
@@ -687,7 +686,7 @@
   <div class="home-grid">
   <div class="block block--full">
     <div class="block-head">
-      <h3>1) 三平台概览</h3>
+      <h3>1) 音乐平台概览</h3>
     </div>
     {% if not home_artist_metrics.get('ok') %}
     <div class="err" style="margin-top:8px;">{{ home_artist_metrics.get('error', '概览数据不可用') }}</div>
@@ -740,7 +739,7 @@
     <div id="block-search-body">
       <form method="post" action="/action/search-songs" class="row js-progress-form js-search-form" data-progress-label="歌曲搜索中" autocomplete="off">
         <input type="hidden" name="platform" value="{{ platform }}" />
-        <input type="text" name="song_keyword" placeholder="输入歌曲名或专辑名关键词" value="{{ form.get('song_keyword', '') }}" autocomplete="off" />
+        <input type="text" name="song_keyword" placeholder="输入歌曲名/专辑名关键词" value="{{ form.get('song_keyword', '') }}" autocomplete="off" />
         <button type="submit">搜索</button>
       </form>
       <div class="progress-wrap js-progress-wrap">
@@ -750,7 +749,6 @@
       <div id="search-result-wrap">
       {% if result_type == "search-songs" %}
       {% if result.get("ok") %}
-      <p class="subtitle" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(148,163,184,0.25);">关键词「{{ result.get("keyword", "") }}」</p>
       <div class="milestone-grid search-song-grid">
         {% for plat in platforms %}
         {% set pdata = result.get("by_platform", {}).get(plat, {}) %}
@@ -1271,6 +1269,20 @@
       }
 
       /** 同一平台内按歌曲分组；组内先按榜单名再按排名 */
+      function isWeeklyToplistRow(row) {
+        var topName = String((row && row.top_name) || "");
+        var topPeriod = String((row && row.top_period) || "").trim();
+        var s = topName + " " + topPeriod;
+        if (s.indexOf("每周") >= 0) return true;
+        if (/^20\d{2}_\d{1,2}$/.test(topPeriod)) return true;
+        return /周榜|周刊|周报|一周|week|weekly|7天|七日/i.test(s);
+      }
+
+      function formatToplistName(row) {
+        var name = String((row && row.top_name) || "").trim() || "-";
+        return isWeeklyToplistRow(row) ? (name + " · 【周榜】") : name;
+      }
+
       function groupToplistBySong(rows) {
         var map = {};
         rows.forEach(function (r) {
@@ -1286,6 +1298,9 @@
         });
         return keys.map(function (k) {
           var list = map[k].slice().sort(function (x, y) {
+            var wx = isWeeklyToplistRow(x) ? 1 : 0;
+            var wy = isWeeklyToplistRow(y) ? 1 : 0;
+            if (wx !== wy) return wx - wy; // 日榜在前，周榜在后
             var na = String(x.top_name || ""), nb = String(y.top_name || "");
             var c = na.localeCompare(nb, "zh-CN");
             if (c !== 0) return c;
@@ -1352,9 +1367,7 @@
                   html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>榜单</th><th>排名</th></tr></thead><tbody>";
                   g.entries.forEach(function (row) {
                     var rank = row.rank != null ? row.rank : "-";
-                    var tn = (row.top_name || "-").trim() || "-";
-                    var period = (row.top_period || "").trim();
-                    var chartLabel = period ? tn + " · " + period : tn;
+                    var chartLabel = formatToplistName(row);
                     html += "<tr><td>" + esc(chartLabel) + "</td><td>#" + esc(String(rank)) + "</td></tr>";
                   });
                   html += "</tbody></table></div>";
