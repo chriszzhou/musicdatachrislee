@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,6 +17,10 @@ from ..tracking import (
 
 from .constants import NEW_SONG_NAME
 from .paths import SUPPORTED_PLATFORMS, _resolve_changes_db_path, _resolve_toplist_db_path
+
+# 变化报告页：各平台「收藏增长 / 粉丝增长」条形图及汇总仅展示增量 >= 该阈值的项
+MIN_CHANGE_REPORT_DISPLAY_DELTA = 10
+
 
 def get_report(
     platform: str,
@@ -75,12 +79,11 @@ def get_report(
     metric_rows = report.get("metric_changes", [])
     artist_metric_rows = report.get("artist_metric_changes", [])
 
-    comment_delta = 0
-    favorite_delta = 0
-    affected_song_mids = set()
     song_deltas: Dict[str, Dict[str, Any]] = {}
     for row in metric_rows:
         metric = str(row.get("metric") or "")
+        if metric != "favorite_count_text":
+            continue
         delta = int(row.get("delta") or 0)
         run_at = str(row.get("run_at") or "")
         new_value = row.get("new_value")
@@ -90,40 +93,24 @@ def get_report(
         if delta <= 0:
             # 仅展示增长数据，过滤减少与无变化。
             continue
-        if metric == "comment_count":
-            comment_delta += delta
-        elif metric == "favorite_count_text":
-            favorite_delta += delta
         song_mid = str(row.get("song_mid") or "").strip()
         if not song_mid:
             continue
-        affected_song_mids.add(song_mid)
         song_name = str(row.get("song_name") or song_mid).strip()
         if song_mid not in song_deltas:
             song_deltas[song_mid] = {
                 "song_name": song_name,
-                "comment": 0,
                 "favorite": 0,
-                "comment_new": None,
                 "favorite_new": None,
-                "comment_run_at": "",
                 "favorite_run_at": "",
             }
         if song_name and song_name != song_mid:
             song_deltas[song_mid]["song_name"] = song_name
-        if metric == "comment_count":
-            song_deltas[song_mid]["comment"] += delta
-            if run_at >= str(song_deltas[song_mid]["comment_run_at"]):
-                song_deltas[song_mid]["comment_run_at"] = run_at
-                song_deltas[song_mid]["comment_new"] = new_value
-        elif metric == "favorite_count_text":
-            song_deltas[song_mid]["favorite"] += delta
-            if run_at >= str(song_deltas[song_mid]["favorite_run_at"]):
-                song_deltas[song_mid]["favorite_run_at"] = run_at
-                song_deltas[song_mid]["favorite_new"] = new_value
+        song_deltas[song_mid]["favorite"] += delta
+        if run_at >= str(song_deltas[song_mid]["favorite_run_at"]):
+            song_deltas[song_mid]["favorite_run_at"] = run_at
+            song_deltas[song_mid]["favorite_new"] = new_value
 
-    fans_delta = 0
-    affected_artist_mids = set()
     artist_deltas: Dict[str, Dict[str, Any]] = {}
     for row in artist_metric_rows:
         if str(row.get("metric") or "") != "fans":
@@ -137,10 +124,6 @@ def get_report(
             continue
         run_at = str(row.get("run_at") or "")
         new_value = row.get("new_value")
-        fans_delta += delta
-        row_artist_mid = str(row.get("artist_mid") or "").strip()
-        if row_artist_mid:
-            affected_artist_mids.add(row_artist_mid)
         artist_name = str(row.get("artist_name") or row.get("artist_mid") or "").strip()
         if artist_name:
             if artist_name not in artist_deltas:
@@ -150,68 +133,43 @@ def get_report(
                 artist_deltas[artist_name]["run_at"] = run_at
                 artist_deltas[artist_name]["new"] = new_value
 
-    comment_items: List[Tuple[int, bool, str]] = []
     favorite_items: List[Tuple[int, bool, str]] = []
-    comment_chart_rows: List[Dict[str, Any]] = []
     favorite_chart_rows: List[Dict[str, Any]] = []
     for song_mid, values in song_deltas.items():
-        comment_new = values.get("comment_new")
         favorite_new = values.get("favorite_new")
-        comment_delta_value = int(values.get("comment") or 0)
         favorite_delta_value = int(values.get("favorite") or 0)
-        if comment_delta_value != 0:
-            comment_items.append(
-                (
-                    abs(comment_delta_value),
-                    comment_delta_value < 0,
-                    "{}(评论{:+d}->{}) [{}]".format(
-                        str(values.get("song_name") or song_mid),
-                        comment_delta_value,
-                        comment_new if comment_new is not None else "-",
-                        song_mid,
-                    ),
-                )
+        if favorite_delta_value < MIN_CHANGE_REPORT_DISPLAY_DELTA:
+            continue
+        favorite_items.append(
+            (
+                abs(favorite_delta_value),
+                favorite_delta_value < 0,
+                "{}(收藏{:+d}->{}) [{}]".format(
+                    str(values.get("song_name") or song_mid),
+                    favorite_delta_value,
+                    favorite_new if favorite_new is not None else "-",
+                    song_mid,
+                ),
             )
-            comment_chart_rows.append(
-                {
-                    "name": str(values.get("song_name") or song_mid),
-                    "song_mid": song_mid,
-                    "delta": comment_delta_value,
-                    "delta_abs": abs(comment_delta_value),
-                    "new_value": comment_new,
-                }
-            )
-        if favorite_delta_value != 0:
-            favorite_items.append(
-                (
-                    abs(favorite_delta_value),
-                    favorite_delta_value < 0,
-                    "{}(收藏{:+d}->{}) [{}]".format(
-                        str(values.get("song_name") or song_mid),
-                        favorite_delta_value,
-                        favorite_new if favorite_new is not None else "-",
-                        song_mid,
-                    ),
-                )
-            )
-            favorite_chart_rows.append(
-                {
-                    "name": str(values.get("song_name") or song_mid),
-                    "song_mid": song_mid,
-                    "delta": favorite_delta_value,
-                    "delta_abs": abs(favorite_delta_value),
-                    "new_value": favorite_new,
-                }
-            )
-    comment_items.sort(key=lambda x: (-x[0], x[1]))
+        )
+        favorite_chart_rows.append(
+            {
+                "name": str(values.get("song_name") or song_mid),
+                "song_mid": song_mid,
+                "delta": favorite_delta_value,
+                "delta_abs": abs(favorite_delta_value),
+                "new_value": favorite_new,
+            }
+        )
     favorite_items.sort(key=lambda x: (-x[0], x[1]))
-    comment_chart_rows.sort(key=lambda x: (-int(x.get("delta_abs") or 0), int(x.get("delta") or 0) < 0))
     favorite_chart_rows.sort(key=lambda x: (-int(x.get("delta_abs") or 0), int(x.get("delta") or 0) < 0))
 
     artist_items: List[Tuple[int, bool, str]] = []
     artist_chart_rows: List[Dict[str, Any]] = []
     for artist_name, values in artist_deltas.items():
         delta_value = int(values.get("delta") or 0)
+        if delta_value < MIN_CHANGE_REPORT_DISPLAY_DELTA:
+            continue
         artist_items.append(
             (
                 abs(delta_value),
@@ -234,24 +192,24 @@ def get_report(
     artist_items.sort(key=lambda x: (-x[0], x[1]))
     artist_chart_rows.sort(key=lambda x: (-int(x.get("delta_abs") or 0), int(x.get("delta") or 0) < 0))
 
+    favorite_delta_shown = sum(int(r.get("delta") or 0) for r in favorite_chart_rows)
+    fans_delta_shown = sum(int(r.get("delta") or 0) for r in artist_chart_rows)
+
     return {
         "ok": True,
         "label": label,
         "value": value_clean,
         "mode": mode_clean,
         "song_summary": {
-            "affected_songs": len(affected_song_mids),
-            "comment_delta": comment_delta,
-            "favorite_delta": favorite_delta,
+            "affected_songs": len(favorite_chart_rows),
+            "favorite_delta": favorite_delta_shown,
         },
         "artist_summary": {
-            "affected_artists": len(affected_artist_mids),
-            "fans_delta": fans_delta,
+            "affected_artists": len(artist_chart_rows),
+            "fans_delta": fans_delta_shown,
         },
-        "song_names_comment": [x[2] for x in comment_items[:song_display_limit]],
         "song_names_favorite": [x[2] for x in favorite_items[:song_display_limit]],
         "artist_names": [x[2] for x in artist_items],
-        "comment_chart_rows": comment_chart_rows[:song_display_limit],
         "favorite_chart_rows": favorite_chart_rows[:song_display_limit],
         "artist_chart_rows": artist_chart_rows[:song_display_limit],
     }
@@ -297,7 +255,7 @@ def get_report_chart_data(
 ) -> Dict[str, Any]:
     """
     获取变化折线图数据：年按月份聚合、月按日聚合、日按当天每次 run_at 聚合。
-    返回 labels 与 series（comment / favorite / fans）。
+    返回 labels 与 series（favorite / fans）。
     use_absolute_favorite=True 时 series.favorite 为各时段「最新收藏数」new_value，否则为增量 SUM(delta)。
     若提供 song_name 则仅统计该歌曲的 metric 变化（用于新歌页单曲曲线）。
     """
@@ -337,7 +295,7 @@ def get_report_chart_data(
     db_path = _resolve_changes_db_path(platform, base_dir)
     if not db_path.is_file():
         empty = {"labels": [], "datasets": []}
-        return {"ok": True, "labels": [], "series": {"comment": [], "favorite": [], "fans": []}, "song_comment": empty, "song_favorite": empty, "song_fans": empty}
+        return {"ok": True, "labels": [], "series": {"favorite": [], "fans": []}, "song_favorite": empty, "song_fans": empty}
 
     conn = connect_sqlite(db_path, row_factory=sqlite3.Row)
     try:
@@ -407,9 +365,8 @@ def get_report_chart_data(
 
         if not labels:
             empty = {"labels": [], "datasets": []}
-            return {"ok": True, "labels": [], "series": {"comment": [], "favorite": [], "fans": []}, "song_comment": empty, "song_favorite": empty, "song_fans": empty}
+            return {"ok": True, "labels": [], "series": {"favorite": [], "fans": []}, "song_favorite": empty, "song_fans": empty}
 
-        series_comment: List[int] = []
         series_favorite: List[int] = []
         series_fans: List[int] = []
 
@@ -424,16 +381,6 @@ def get_report_chart_data(
                 period_params = period_params + [(artist_mid or "").strip()]
             if (song_name or "").strip():
                 period_params = period_params + [(song_name or "").strip()]
-
-            comment_row = conn.execute(
-                """
-                SELECT COALESCE(SUM(delta), 0) AS s
-                FROM {}
-                WHERE {} {} {} AND metric = 'comment_count'
-                """.format(metric_from, period_where, artist_filter, song_filter),
-                period_params,
-            ).fetchone()
-            series_comment.append(int(comment_row[0] or 0))
 
             if use_absolute_favorite:
                 fav_row = conn.execute(
@@ -467,9 +414,8 @@ def get_report_chart_data(
             ).fetchone()
             series_fans.append(int(fans_row[0] or 0))
 
-        # 按歌曲维度的评论/收藏：每期按 song_mid 聚合，取总变化量最大的 top_songs 首
+        # 按歌曲维度的收藏：每期按 song_mid 聚合，取总变化量最大的 top_songs 首
         top_songs = 10
-        comment_by_song: Dict[str, List[int]] = {}  # song_mid -> [delta per period]
         favorite_by_song: Dict[str, List[int]] = {}
         song_names: Dict[str, str] = {}
 
@@ -484,26 +430,6 @@ def get_report_chart_data(
                 period_params = period_params + [(artist_mid or "").strip()]
             if (song_name or "").strip():
                 period_params = period_params + [(song_name or "").strip()]
-
-            for row in conn.execute(
-                """
-                SELECT song_mid, song_name, COALESCE(SUM(delta), 0) AS s
-                FROM {}
-                WHERE {} {} {} AND metric = 'comment_count'
-                GROUP BY song_mid
-                """.format(metric_from, period_where, artist_filter, song_filter),
-                period_params,
-            ).fetchall():
-                mid = str(row[0] or "").strip()
-                if not mid:
-                    continue
-                name = str(row[1] or mid).strip() or mid
-                delta = int(row[2] or 0)
-                if mid not in song_names:
-                    song_names[mid] = name
-                if mid not in comment_by_song:
-                    comment_by_song[mid] = [0] * len(labels)
-                comment_by_song[mid][period_idx] = delta
 
             for row in conn.execute(
                 """
@@ -540,7 +466,6 @@ def get_report_chart_data(
                 datasets.append({"name": name, "data": by_song[mid]})
             return datasets
 
-        song_comment_datasets = _top_datasets(comment_by_song, song_names, top_songs)
         song_favorite_datasets = _top_datasets(favorite_by_song, song_names, top_songs)
 
         # 首页「按日」折线图：同一天可能因新歌页 1 分钟任务产生大量 run_at，限制最多点数避免图过密（与新歌页 mode=range 无关）
@@ -552,11 +477,8 @@ def get_report_chart_data(
                 indices.append(i * (n - 1) // (MAX_DAY_CHART_POINTS - 1))
             indices.append(n - 1)
             labels = [labels[i] for i in indices]
-            series_comment = [series_comment[i] for i in indices]
             series_favorite = [series_favorite[i] for i in indices]
             series_fans = [series_fans[i] for i in indices]
-            for ds in song_comment_datasets:
-                ds["data"] = [ds["data"][i] for i in indices]
             for ds in song_favorite_datasets:
                 ds["data"] = [ds["data"][i] for i in indices]
 
@@ -576,11 +498,9 @@ def get_report_chart_data(
             "ok": True,
             "labels": labels,
             "series": {
-                "comment": series_comment,
                 "favorite": series_favorite,
                 "fans": series_fans,
             },
-            "song_comment": {"labels": labels, "datasets": song_comment_datasets},
             "song_favorite": {"labels": labels, "datasets": song_favorite_datasets},
             "song_fans": {"labels": labels, "datasets": [{"name": "粉丝", "data": series_fans}]},
         }

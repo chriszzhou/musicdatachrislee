@@ -263,14 +263,6 @@ class NeteaseMusicClient:
         )
         started_at = time.monotonic()
 
-        song_ids = [task["song_id"] for task in song_tasks]
-        comment_counts = self._fetch_song_comment_counts_batch(song_ids)
-        for task in song_tasks:
-            sid_i = task["song_id"]
-            task["item"]["_metric_comment_count"] = int(comment_counts.get(sid_i, 0))
-
-        logger.info("Comment batch fetch done: songs={}", total)
-
         def _enrich_favorite_only(task: Dict[str, Any]) -> None:
             item = task["item"]
             sid_i = task["song_id"]
@@ -440,17 +432,50 @@ class NeteaseMusicClient:
         }
 
     def _fetch_song_details_by_ids(self, song_ids: List[int]) -> List[Dict[str, Any]]:
-        """根据歌曲 id 列表批量拉取详情，返回与 fetch_toplist_detail 一致的 song 结构。每批最多 100 个 id。"""
+        """
+        根据歌曲 id 列表批量拉取详情，返回与 fetch_toplist_detail 一致的 song 结构。
+
+        网易云在「歌单详情」后立刻用大 ids 调 /api/song/detail 常返回 code=405（操作频繁），
+        故首包前短暂等待、缩小单批 id 数、批间间隔，并对 405 做有限次退避重试。
+        """
         if not song_ids:
             return []
-        batch_size = 100
+        # 单批不宜过大；批与批之间留间隔，降低 405 概率
+        batch_size = 40
         all_songs: List[Dict[str, Any]] = []
-        for i in range(0, len(song_ids), batch_size):
+        for bi, i in enumerate(range(0, len(song_ids), batch_size)):
+            if bi == 0:
+                time.sleep(2.0)
+            elif bi > 0:
+                time.sleep(1.5)
             chunk = song_ids[i : i + batch_size]
             ids_str = json.dumps(list(chunk))
-            data = self._get_json("/api/song/detail", {"ids": ids_str})
-            if int(data.get("code") or 0) != 200:
-                logger.warning("Netease song/detail failed, code={}", data.get("code"))
+            data: Dict[str, Any] = {}
+            ok_batch = False
+            for attempt in range(4):
+                data = self._get_json("/api/song/detail", {"ids": ids_str})
+                code = int(data.get("code") or 0)
+                if code == 200:
+                    ok_batch = True
+                    break
+                msg = str(data.get("msg") or data.get("message") or "")
+                if code == 405 and attempt < 3:
+                    wait_s = 3.0 * (attempt + 1)
+                    logger.warning(
+                        "Netease song/detail rate limited (code=405), wait={}s, msg={}, batch={}",
+                        wait_s,
+                        msg or "-",
+                        len(chunk),
+                    )
+                    time.sleep(wait_s)
+                    continue
+                logger.warning(
+                    "Netease song/detail failed, code={}, msg={}",
+                    code,
+                    msg or "-",
+                )
+                break
+            if not ok_batch:
                 continue
             raw_songs = data.get("songs") or []
             if not isinstance(raw_songs, list):

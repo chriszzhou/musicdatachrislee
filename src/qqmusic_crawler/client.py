@@ -155,7 +155,6 @@ class QQMusicClient:
         if not song_ids:
             return songs
 
-        comment_counts = self.fetch_song_comment_counts(song_ids)
         favorite_count_texts = self.fetch_song_favorite_counts(song_ids)
 
         for item in songs:
@@ -164,8 +163,6 @@ class QQMusicClient:
                 sid_int = int(sid)
             except (TypeError, ValueError):
                 continue
-            if sid_int in comment_counts:
-                item["_metric_comment_count"] = comment_counts[sid_int]
             if sid_int in favorite_count_texts:
                 item["_metric_favorite_count_text"] = favorite_count_texts[sid_int]
         return songs

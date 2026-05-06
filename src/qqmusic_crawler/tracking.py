@@ -75,16 +75,15 @@ def _read_artist_songs(db_file: Path, artist_mid: str) -> Dict[str, Dict[str, ob
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT song_mid, name, comment_count, favorite_count_text
+            SELECT song_mid, name, favorite_count_text
             FROM songs
             WHERE artist_mid = ?
             """,
             (artist_mid,),
         )
-        for song_mid, name, comment_count, favorite_count_text in cur.fetchall():
+        for song_mid, name, favorite_count_text in cur.fetchall():
             songs[str(song_mid)] = {
                 "name": name or "",
-                "comment_count": _parse_count_value(comment_count),
                 "favorite_count_text": _parse_count_value(favorite_count_text),
             }
     finally:
@@ -458,7 +457,7 @@ def track_changes_for_artist(
     for song_mid in sorted(current_keys & previous_keys):
         curr_item = current[song_mid]
         prev_item = previous[song_mid]
-        for metric in ("comment_count", "favorite_count_text"):
+        for metric in ("favorite_count_text",):
             old_v = int(prev_item.get(metric, 0) or 0)
             new_v = int(curr_item.get(metric, 0) or 0)
             delta = new_v - old_v

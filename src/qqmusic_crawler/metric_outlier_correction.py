@@ -1,5 +1,5 @@
 """
-修正各平台变化库中「收藏 / 评论」因抓取异常导致的突变值（三平台表结构一致）。
+修正各平台变化库中「收藏」因抓取异常导致的突变值（三平台表结构一致）。
 
 规则：
   - 对同一 (artist_mid, song_mid, metric) 按 run_at 排序得到序列 v[0], v[1], ...
@@ -64,7 +64,7 @@ def _fetch_all_rows(conn: sqlite3.Connection) -> List[Tuple[str, int, str, str, 
                 SELECT id, run_at, artist_mid, song_mid, song_name, metric,
                        old_value, new_value, delta, snapshot_db
                 FROM {}
-                WHERE metric IN ('comment_count', 'favorite_count_text')
+                WHERE metric = 'favorite_count_text'
                 ORDER BY run_at ASC
                 """.format(table),
             ).fetchall()

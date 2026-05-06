@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from typing import Any, Dict, List
 
@@ -340,12 +339,8 @@ class KugouMusicClient:
         )
         started_at = time.monotonic()
 
-        song_hashes: List[str] = []
         mixsongids: List[int] = []
         for item in songs:
-            song_hash = str(item.get("mid") or "").strip()
-            if song_hash:
-                song_hashes.append(song_hash)
             mixsongid = item.get("mixsongid")
             try:
                 mixsongids.append(int(mixsongid))
@@ -358,32 +353,11 @@ class KugouMusicClient:
             len(favorite_map),
         )
 
-        comment_map: Dict[str, int] = {}
-        progress_step = 10
-        completed = 0
-        with ThreadPoolExecutor(max_workers=self._metric_workers) as executor:
-            future_map = {
-                executor.submit(self._fetch_song_comment_count, song_hash): song_hash
-                for song_hash in song_hashes
-            }
-            for fut in as_completed(future_map):
-                song_hash = future_map[fut]
-                comment_map[song_hash] = fut.result()
-                completed += 1
-                if completed % progress_step == 0 or completed == len(song_hashes):
-                    logger.info(
-                        "Kugou comment fetch progress: {}/{}",
-                        completed,
-                        len(song_hashes),
-                    )
-
         for item in songs:
-            song_hash = str(item.get("mid") or "").strip().upper()
             try:
                 mixsongid = int(item.get("mixsongid"))
             except (TypeError, ValueError):
                 mixsongid = 0
-            item["_metric_comment_count"] = int(comment_map.get(song_hash, 0))
             item["_metric_favorite_count_text"] = int(favorite_map.get(mixsongid, 0))
 
         elapsed = time.monotonic() - started_at

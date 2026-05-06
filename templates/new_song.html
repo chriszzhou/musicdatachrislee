@@ -241,12 +241,12 @@
     </div>
 
     <div class="block">
-      <h3>一、当前歌曲三平台收藏量、评论数</h3>
+      <h3>一、当前歌曲三平台收藏量</h3>
       <div id="current-loading" class="subtitle">加载中...</div>
       <div id="current-err" class="err" style="display:none;"></div>
       <table id="current-table" style="display:none;">
         <thead>
-          <tr><th>平台</th><th>收藏量</th><th>评论数</th></tr>
+          <tr><th>平台</th><th>收藏量</th></tr>
         </thead>
         <tbody id="current-tbody"></tbody>
       </table>
@@ -348,12 +348,12 @@
           var v = platforms[p];
           if (!v) return;
           if (v.ok) {
-            html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? v.favorite_count : "-") + "</td><td>" + (v.comment_count != null ? v.comment_count : "-") + "</td></tr>";
+            html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? v.favorite_count : "-") + "</td></tr>";
           } else {
-            html += "<tr><td>" + p + "</td><td colspan=\"2\" class=\"err\">" + (v.error || "无数据") + "</td></tr>";
+            html += "<tr><td>" + p + "</td><td class=\"err\">" + (v.error || "无数据") + "</td></tr>";
           }
         });
-        tbody.innerHTML = html || "<tr><td colspan=\"3\">暂无数据</td></tr>";
+        tbody.innerHTML = html || "<tr><td colspan=\"2\">暂无数据</td></tr>";
         table.style.display = "table";
         var hint = document.getElementById("current-snapshot-hint");
         if (hint) {

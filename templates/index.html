@@ -586,7 +586,7 @@
     }
     .home-kpi-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       margin-top: 4px;
       margin-bottom: 10px;
@@ -616,13 +616,11 @@
     }
     .home-kpi-card--fans .home-kpi-value { color: #9b75cb; }
     .home-kpi-card--favorite .home-kpi-value { color: #78a7de; }
-    .home-kpi-card--comment .home-kpi-value { color: #66b99f; }
     body[data-theme="light"] .home-kpi-card--fans .home-kpi-value { color: #6d28d9; }
     body[data-theme="light"] .home-kpi-card--favorite .home-kpi-value { color: #2563eb; }
-    body[data-theme="light"] .home-kpi-card--comment .home-kpi-value { color: #047857; }
     .home-pie-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-top: 10px;
     }
@@ -708,10 +706,6 @@
         <div class="home-kpi-label">总收藏数</div>
         <div class="home-kpi-value" id="home-kpi-favorite">-</div>
       </div>
-      <div class="home-kpi-card home-kpi-card--comment">
-        <div class="home-kpi-label">总评论数</div>
-        <div class="home-kpi-value" id="home-kpi-comment">-</div>
-      </div>
     </div>
     <div class="home-pie-grid">
       <div class="home-pie-card chart-card">
@@ -723,11 +717,6 @@
         <div class="chart-title">收藏合计占比</div>
         <div class="pie-chart-empty" id="home-pie-empty-favorite" style="display:none;">暂无数据（各平台均为 0 或无法读取）</div>
         <div class="home-pie-canvas" id="home-pie-favorite"></div>
-      </div>
-      <div class="home-pie-card chart-card">
-        <div class="chart-title">评论合计占比</div>
-        <div class="pie-chart-empty" id="home-pie-empty-comment" style="display:none;">暂无数据（各平台均为 0 或无法读取）</div>
-        <div class="home-pie-canvas" id="home-pie-comment"></div>
       </div>
     </div>
   </div>
@@ -762,7 +751,6 @@
                   <tr>
                     <th>歌曲名</th>
                     <th>专辑</th>
-                    <th>评论</th>
                     <th>收藏</th>
                   </tr>
                 </thead>
@@ -771,7 +759,6 @@
                   <tr>
                     <td class="search-song-name">{% if plat == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif plat == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
                     <td>{{ row.get("album_name") }}</td>
-                    <td>{{ row.get("comment_count") }}</td>
                     <td>{{ row.get("favorite_count") }}</td>
                   </tr>
                   {% endfor %}
@@ -959,19 +946,13 @@
           var row = by[p];
           return row && row.favorite_sum != null ? Number(row.favorite_sum) : 0;
         });
-        var coms = order.map(function (p) {
-          var row = by[p];
-          return row && row.comment_sum != null ? Number(row.comment_sum) : 0;
-        });
         var colors = getTheme() === "dark"
           ? ["#5ba276", "#bc7075", "#5a98bf"]
           : ["#22b35c", "#e85a5a", "#1ab0ff"];
         var kpiFans = document.getElementById("home-kpi-fans");
         var kpiFav = document.getElementById("home-kpi-favorite");
-        var kpiCom = document.getElementById("home-kpi-comment");
         if (kpiFans) kpiFans.textContent = numberFmt(sumArr(fans));
         if (kpiFav) kpiFav.textContent = numberFmt(sumArr(favs));
-        if (kpiCom) kpiCom.textContent = numberFmt(sumArr(coms));
 
         function buildSeriesData(values) {
           return values.map(function (v, idx) {
@@ -1031,7 +1012,6 @@
         }
         setupPie("home-pie-fans", "home-pie-empty-fans", fans);
         setupPie("home-pie-favorite", "home-pie-empty-favorite", favs);
-        setupPie("home-pie-comment", "home-pie-empty-comment", coms);
       }
       function initHomePies() {
         var el = document.getElementById("home-metrics-json");
@@ -1149,12 +1129,11 @@
           html += "<div class=\"milestone-card-body\">";
           if (pdata.ok) {
             if (Array.isArray(pdata.rows) && pdata.rows.length > 0) {
-              html += "<table class=\"milestone-table search-song-table\"><thead><tr><th>歌曲名</th><th>专辑</th><th>评论</th><th>收藏</th></tr></thead><tbody>";
+              html += "<table class=\"milestone-table search-song-table\"><thead><tr><th>歌曲名</th><th>专辑</th><th>收藏</th></tr></thead><tbody>";
               pdata.rows.forEach(function (row) {
                 html += "<tr>";
                 html += "<td class=\"search-song-name\">" + searchSongNameCellHtml(p.key, row || {}) + "</td>";
                 html += "<td>" + escapeHtml((row && row.album_name) || "-") + "</td>";
-                html += "<td>" + escapeHtml(String((row && row.comment_count) != null ? row.comment_count : 0)) + "</td>";
                 html += "<td>" + escapeHtml(String((row && row.favorite_count) != null ? row.favorite_count : 0)) + "</td>";
                 html += "</tr>";
               });

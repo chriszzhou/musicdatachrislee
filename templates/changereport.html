@@ -626,28 +626,6 @@
         <h4 class="subtitle" style="margin: 0 0 10px;">{{ platform_display_names.get(plat, plat) }}</h4>
         {% if result.get("ok") %}
       <div class="chart-card chart-card-fixed">
-        <div class="chart-title">评论增长</div>
-      <div class="chart-content-scroll">
-      {% if result.get("comment_chart_rows") %}
-      {% set comment_rows = result.get("comment_chart_rows", []) %}
-      {% set comment_max_abs = (comment_rows | map(attribute='delta_abs') | max) %}
-      {% for row in comment_rows %}
-      {% set width = ((row.get("delta_abs") or 0) * 100 / (comment_max_abs or 1)) %}
-      <div class="chart-row">
-        <div class="chart-label">{{ row.get("name") }}</div>
-        <div class="chart-track">
-          <div class="chart-fill chart-fill-comment" style="width: {{ '%.2f'|format(width) }}%;"></div>
-        </div>
-        <div class="chart-value">{{ "%+d"|format(row.get("delta") or 0) }} -&gt; {{ row.get("new_value") if row.get("new_value") is not none else "-" }}</div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div>无</div>
-      {% endif %}
-      </div>
-      </div>
-
-      <div class="chart-card chart-card-fixed">
         <div class="chart-title">收藏增长</div>
       <div class="chart-content-scroll">
       {% if result.get("favorite_chart_rows") %}
@@ -709,7 +687,7 @@
       {% if result.get("ok") %}
       <div id="report-chart-wrap-{{ plat }}" class="report-chart-wrap-row" style="display:none; margin-top: 14px;">
         <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">变化趋势（评论 / 收藏 / 粉丝 增量）</div>
+          <div class="chart-title">变化趋势（收藏 / 粉丝 增量）</div>
           <div id="report-chart-no-data-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
           <canvas id="report-chart-canvas-{{ plat }}"></canvas>
         </div>
@@ -717,11 +695,6 @@
           <div class="chart-title">收藏折线图（歌曲，Top10）</div>
           <div id="report-chart-no-data-favorite-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
           <canvas id="report-chart-canvas-favorite-{{ plat }}"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">评论折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-comment-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-comment-{{ plat }}"></canvas>
         </div>
         <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
           <div class="chart-title">粉丝折线图</div>
@@ -905,9 +878,8 @@
         destroyReportCharts();
         var noDataEl = document.getElementById("report-chart-no-data-" + suf);
         var noDataFav = document.getElementById("report-chart-no-data-favorite-" + suf);
-        var noDataComment = document.getElementById("report-chart-no-data-comment-" + suf);
         var noDataFans = document.getElementById("report-chart-no-data-fans-" + suf);
-        [noDataEl, noDataFav, noDataComment, noDataFans].forEach(function (el) {
+        [noDataEl, noDataFav, noDataFans].forEach(function (el) {
           if (el) el.style.display = "none";
         });
         var url = "/api/report-chart?platform=" + encodeURIComponent(platform) +
@@ -1038,7 +1010,6 @@
               data: {
                 labels: displayLabels,
                 datasets: [
-                  Object.assign({ label: "评论增量", data: series.comment || [], borderColor: borderColorFn("#34d399"), backgroundColor: chartGradient(52, 211, 153) }, lineStyle),
                   Object.assign({ label: "收藏增量", data: series.favorite || [], borderColor: borderColorFn("#60a5fa"), backgroundColor: chartGradient(96, 165, 250) }, lineStyle),
                   Object.assign({ label: "粉丝增量", data: series.fans || [], borderColor: borderColorFn("#a78bfa"), backgroundColor: chartGradient(167, 139, 250) }, lineStyle)
                 ]
@@ -1074,7 +1045,6 @@
             }
 
             drawSubChart("report-chart-canvas-favorite-" + suf, "report-chart-no-data-favorite-" + suf, data.song_favorite || {}, "收藏");
-            drawSubChart("report-chart-canvas-comment-" + suf, "report-chart-no-data-comment-" + suf, data.song_comment || {}, "评论");
             drawSubChart("report-chart-canvas-fans-" + suf, "report-chart-no-data-fans-" + suf, data.song_fans || {}, "粉丝");
           })
           .catch(function (err) {

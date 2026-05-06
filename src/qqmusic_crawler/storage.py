@@ -136,7 +136,7 @@ class Storage:
                     album_name=album_name,
                     duration=item.get("interval") or item.get("duration"),
                     publish_time=item.get("time_public") or item.get("pubtime"),
-                    comment_count=item.get("_metric_comment_count"),
+                    comment_count=None,
                     favorite_count=None,
                     favorite_count_text=item.get("_metric_favorite_count_text"),
                     mixsongid=mixsongid_val,

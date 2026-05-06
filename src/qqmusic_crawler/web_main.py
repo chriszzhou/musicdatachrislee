@@ -219,7 +219,7 @@ def _start_schedulers() -> None:
 
 
 def _home_metrics_payload() -> Dict[str, Any]:
-    """首页首屏：三平台粉丝 / 收藏合计 / 评论合计（饼图数据）。"""
+    """首页首屏：三平台粉丝与收藏合计（饼图数据）。"""
     artist = settings.effective_default_topsongs_artist
     data = get_artist_snapshot_metrics_all_platforms(
         artist_name=artist,
@@ -269,7 +269,7 @@ async def changereport_page(request: Request, platform: str = "qq") -> HTMLRespo
 
 @app.get("/new-song", response_class=HTMLResponse)
 async def new_song_page(request: Request) -> HTMLResponse:
-    """新歌页：当前三平台收藏/评论、收藏量曲线、榜单数据（歌名见配置 QQMC_NEW_SONG_NAME）。"""
+    """新歌页：当前三平台收藏量、收藏曲线、榜单数据（歌名见配置 QQMC_NEW_SONG_NAME）。"""
     context = _base_context("qq")
     context["request"] = request
     return templates.TemplateResponse("new_song.html", context)
@@ -277,7 +277,7 @@ async def new_song_page(request: Request) -> HTMLResponse:
 
 @app.get("/api/new-song/current")
 async def api_new_song_current() -> JSONResponse:
-    """新歌页用：当前歌曲三平台收藏量、评论数。"""
+    """新歌页用：当前歌曲三平台收藏量。"""
     data = await _run_in_thread(get_new_song_current_metrics, base_dir=PROJECT_ROOT)
     return JSONResponse(data)
 

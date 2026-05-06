@@ -14,7 +14,9 @@ from ..toplist_storage import (
     query_artist_toplist_hits_since,
 )
 from ..tracking import (
+    _append_favorite_milestone_log,
     _ensure_changes_tables,
+    _favorite_milestone_should_log,
     _has_legacy_metric_changes_table,
     _list_change_month_tables,
     _table_name,
@@ -93,18 +95,17 @@ def _read_song_from_snapshot(
         try:
             row = conn.execute(
                 """
-                SELECT song_mid, song_id, name, COALESCE(comment_count, 0), COALESCE(favorite_count_text, 0),
-                       mixsongid
+                SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0), mixsongid
                 FROM songs WHERE artist_mid = ? AND (name = ? OR name LIKE ?)
                 LIMIT 1
                 """,
                 (artist_mid, song_name.strip(), "%" + song_name.strip() + "%"),
             ).fetchone()
-            mixsongid = int(row[5]) if row and len(row) > 5 and row[5] is not None else None
+            mixsongid = int(row[4]) if row and len(row) > 4 and row[4] is not None else None
         except sqlite3.OperationalError:
             row = conn.execute(
                 """
-                SELECT song_mid, song_id, name, COALESCE(comment_count, 0), COALESCE(favorite_count_text, 0)
+                SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0)
                 FROM songs WHERE artist_mid = ? AND (name = ? OR name LIKE ?)
                 LIMIT 1
                 """,
@@ -117,8 +118,7 @@ def _read_song_from_snapshot(
             "song_mid": str(row[0] or "").strip(),
             "song_id": int(row[1]) if row[1] is not None else None,
             "name": str(row[2] or "").strip(),
-            "comment_count": int(row[3] or 0),
-            "favorite_count_text": int(row[4] or 0),
+            "favorite_count_text": int(row[3] or 0),
             "mixsongid": mixsongid,
         }
     finally:
@@ -157,7 +157,7 @@ def update_new_song_one_platform(
     platform: str,
     base_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """单平台：从最新快照取出「春雨里」的 id，只对该一首拉取收藏/评论并更新快照与 metric_changes。"""
+    """单平台：从最新快照取出「春雨里」的 id，只对该一首拉取收藏并更新快照与 metric_changes。"""
     base_dir = (base_dir or Path(".")).resolve()
     meta = get_platform_meta(platform)
     client = build_client(platform)
@@ -197,9 +197,7 @@ def update_new_song_one_platform(
     storage.ensure_artist_stub(artist_mid, name=artist_name)
     storage.upsert_songs([item], artist_mid=artist_mid)
 
-    new_comment = int(item.get("_metric_comment_count") or 0)
     new_fav = int(item.get("_metric_favorite_count_text") or 0)
-    old_comment = int(old_row["comment_count"])
     old_fav = int(old_row["favorite_count_text"])
 
     song_mid = str(old_row.get("song_mid") or item.get("songmid") or item.get("mid") or item.get("id") or "").strip()
@@ -212,16 +210,17 @@ def update_new_song_one_platform(
         song_mid=song_mid,
         song_name=NEW_SONG_NAME,
         snapshot_db=snapshot_db_str,
-        metrics=[
-            ("comment_count", old_comment, new_comment),
-            ("favorite_count_text", old_fav, new_fav),
-        ],
+        metrics=[("favorite_count_text", old_fav, new_fav)],
     )
-    return {"ok": True, "platform": platform, "favorite_count": new_fav, "comment_count": new_comment}
+    # 与 crawl_track 口径保持一致：新歌定时更新若跨越「万」档，也写入里程碑日志。
+    if _favorite_milestone_should_log(platform, old_fav, new_fav, new_fav - old_fav):
+        milestone_log = changes_db.parent / "milestone_{}.log".format(platform)
+        _append_favorite_milestone_log(milestone_log, NEW_SONG_NAME, new_fav)
+    return {"ok": True, "platform": platform, "favorite_count": new_fav}
 
 
 def get_new_song_current_metrics(base_dir: Optional[Path] = None) -> Dict[str, Any]:
-    """新歌页用：三平台当前收藏量、评论数（从各平台最新快照读）。"""
+    """新歌页用：三平台当前收藏量（从各平台最新快照读）。"""
     base_dir = (base_dir or Path(".")).resolve()
     out: Dict[str, Any] = {"ok": True, "song_name": NEW_SONG_NAME, "artist_name": NEW_SONG_ARTIST, "platforms": {}}
     for platform in SUPPORTED_PLATFORMS:
@@ -237,15 +236,15 @@ def get_new_song_current_metrics(base_dir: Optional[Path] = None) -> Dict[str, A
             finally:
                 client.close()
         if not artist_mid:
-            out["platforms"][platform] = {"ok": False, "error": "未解析到歌手", "favorite_count": None, "comment_count": None}
+            out["platforms"][platform] = {"ok": False, "error": "未解析到歌手", "favorite_count": None}
             continue
         latest = _get_latest_snapshot_path(platform, artist_mid, base_dir)
         if not latest:
-            out["platforms"][platform] = {"ok": False, "error": "暂无快照", "favorite_count": None, "comment_count": None}
+            out["platforms"][platform] = {"ok": False, "error": "暂无快照", "favorite_count": None}
             continue
         row = _read_song_from_snapshot(latest, artist_mid, NEW_SONG_NAME)
         if not row:
-            out["platforms"][platform] = {"ok": False, "error": "快照中无该歌曲", "favorite_count": None, "comment_count": None}
+            out["platforms"][platform] = {"ok": False, "error": "快照中无该歌曲", "favorite_count": None}
             continue
         try:
             beijing_tz = timezone(timedelta(hours=8))
@@ -256,7 +255,6 @@ def get_new_song_current_metrics(base_dir: Optional[Path] = None) -> Dict[str, A
             "ok": True,
             "platform_name": meta["name"],
             "favorite_count": row["favorite_count_text"],
-            "comment_count": row["comment_count"],
             "song_mid": row["song_mid"],
             "snapshot_at": snapshot_at,
         }
@@ -351,7 +349,7 @@ def get_new_song_chart_data(
     value: str,
     base_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """新歌页用：单首「春雨里」的收藏/评论变化曲线。mode=range 时从开始统计日到当前均匀取 10 点。"""
+    """新歌页用：单首「春雨里」的收藏变化曲线。mode=range 时从开始统计日到当前均匀取 10 点。"""
     if (mode or "").strip().lower() == "range":
         return get_new_song_chart_data_from_start(platform, base_dir=base_dir)
     artist_mid = get_artist_mid_from_toplist_db(_resolve_toplist_db_path(platform, base_dir), NEW_SONG_ARTIST)

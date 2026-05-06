@@ -45,6 +45,18 @@ def _is_likely_weekly_chart(top_name: str, top_period: str) -> bool:
     return any(k in s for k in keys)
 
 
+def _is_workday_chart(top_name: str, top_period: str) -> bool:
+    """是否为「工作日更新」类型（日榜子类）。"""
+    s = "{} {}".format(top_name or "", top_period or "")
+    keys = (
+        "工作日",
+        "weekday",
+        "Weekday",
+        "WEEKDAY",
+    )
+    return any(k in s for k in keys)
+
+
 def _year_period_tuple_from_row(row: Dict[str, Any]) -> Optional[Tuple[int, int, int]]:
     """从 top_period / top_update_time 末尾解析「年 + 周期序号」，用于无日历日时的周榜期号比较。"""
     for src in (str(row.get("top_period") or ""), str(row.get("top_update_time") or "")):
@@ -122,8 +134,13 @@ def row_matches_beijing_calendar_day(row: Dict[str, Any], today_bj: date) -> boo
 
     周榜：不在此按「今日」截断；新鲜度由「同榜仅保留最新一期」处理。
     """
-    if _is_likely_weekly_chart(str(row.get("top_name") or ""), str(row.get("top_period") or "")):
+    top_name = str(row.get("top_name") or "")
+    top_period = str(row.get("top_period") or "")
+    if _is_likely_weekly_chart(top_name, top_period):
         return True
+    # 「工作日榜」按日榜处理：周末不应当视为今日有效更新。
+    if _is_workday_chart(top_name, top_period) and today_bj.weekday() >= 5:
+        return False
     d = infer_chart_asof_date(row)
     if d is None:
         return True
