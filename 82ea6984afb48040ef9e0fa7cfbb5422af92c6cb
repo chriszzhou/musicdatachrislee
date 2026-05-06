@@ -1,0 +1,61 @@
+src/qqmusic_crawler/web_service/new_song.py
+  739b386ec39ceee3 98,104,108,121,160,213,219,223,239,243,247,352
+src/qqmusic_crawler/web_main.py
+  739b386ec39ceee3 222,272,280
+src/qqmusic_crawler/metric_outlier_correction.py
+  739b386ec39ceee3 2,67
+src/qqmusic_crawler/web_service/reporting.py
+  739b386ec39ceee3 4,21-24,85-86,109-112,141-152,154-163,171-172,195-197,204-205,208-209,258,298,368,417
+templates/new_song.html
+  739b386ec39ceee3 244,249,351,353,356
+src/qqmusic_crawler/netease_client.py
+  739b386ec39ceee3 435-440,443-444,446-450,453-478
+src/qqmusic_crawler/web_service/search_top.py
+  739b386ec39ceee3 150,172-173,175-176,197,248,307
+.gitignore
+  739b386ec39ceee3 3
+src/qqmusic_crawler/storage.py
+  739b386ec39ceee3 139
+src/qqmusic_crawler/tracking.py
+  739b386ec39ceee3 78,84,460
+src/qqmusic_crawler/netease_share_url.py
+  bd23c9dfe3cb6fbd 1-155
+templates/changereport.html
+  739b386ec39ceee3 690,882
+templates/index.html
+  739b386ec39ceee3 589,623,1132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.11",
+  "base_commit_sha": "82ea6984afb48040ef9e0fa7cfbb5422af92c6cb",
+  "prompts": {
+    "739b386ec39ceee3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bc0c047b-0e0e-4410-8235-2c6d6696140f",
+        "model": "default"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 158,
+      "total_deletions": 324,
+      "accepted_lines": 125,
+      "overriden_lines": 0,
+      "messages_url": "https://gitai.gz.cvte.cn/cas/8c06dcb0c697916557727213057c1e650191036f329a405317a3df622f2f03e5"
+    },
+    "bd23c9dfe3cb6fbd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "11d42d33-431c-46df-920c-13ca522c509c",
+        "model": "default"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 155,
+      "total_deletions": 0,
+      "accepted_lines": 155,
+      "overriden_lines": 0
+    }
+  }
+}
