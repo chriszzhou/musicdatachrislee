@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -84,7 +85,9 @@ def crawl_track(
         artist_mid, resolved_name = resolved
         _emit(5, "已定位歌手，正在读取歌手信息")
         profile = client.fetch_artist_profile(artist_mid)
-        page_size = settings.qqmusic_default_song_page_size
+        # 各平台最大 page_size 不同：QQ=60, 网易云=120, 酷狗=200
+        _platform_page_size = {"qq": 60, "netease": 120, "kugou": 200}
+        page_size = _platform_page_size.get(platform, settings.qqmusic_default_song_page_size)
         total_song = int(profile.get("total_song") or 0)
 
         song_limit_safe: Optional[int] = None
@@ -121,33 +124,47 @@ def crawl_track(
 
         _emit(8, "开始抓取歌曲列表")
         total_saved = 0
-        for page in range(1, song_pages + 1):
+
+        def _fetch_page(page_num: int) -> List[Dict[str, Any]]:
             remaining = None
             if target_song_count is not None:
                 remaining = target_song_count - total_saved
                 if remaining <= 0:
-                    break
-
+                    return []
             songs = client.fetch_songs_by_artist(
                 artist_mid=artist_mid,
-                page=page,
+                page=page_num,
                 page_size=page_size,
             )
             if remaining is not None and remaining < len(songs):
                 songs = songs[:remaining]
-            if not songs:
-                break
+            return songs
 
-            songs = client.enrich_song_metrics(songs)
-            saved = storage.upsert_songs(songs, artist_mid=artist_mid)
-            total_saved += saved
+        # Pipeline: 预取下一页与当前页 enrich+save 并发
+        with ThreadPoolExecutor(max_workers=1) as prefetch_pool:
+            # 预取第 1 页
+            next_future = prefetch_pool.submit(_fetch_page, 1)
 
-            base_progress = int(page / max(song_pages, 1) * 90)
-            _emit(base_progress, "抓取中: 第{}/{}页，已保存{}首".format(page, song_pages, total_saved))
+            for page in range(1, song_pages + 1):
+                # 取出当前页（已在上一轮预取）
+                songs = next_future.result()
 
-            if len(songs) < page_size and target_song_count is None:
-                # 返回不足一页时认为到达末尾，避免未知总量下继续空跑。
-                break
+                if not songs:
+                    break
+
+                # 提前预取下一页（与 enrich+save 并发）
+                if page < song_pages:
+                    next_future = prefetch_pool.submit(_fetch_page, page + 1)
+
+                songs = client.enrich_song_metrics(songs)
+                saved = storage.upsert_songs(songs, artist_mid=artist_mid)
+                total_saved += saved
+
+                base_progress = int(page / max(song_pages, 1) * 90)
+                _emit(base_progress, "抓取中: 第{}/{}页，已保存{}首".format(page, song_pages, total_saved))
+
+                if len(songs) < page_size and target_song_count is None:
+                    break
 
         _emit(92, "抓取完成，正在追踪变化")
         result = track_changes_for_artist(

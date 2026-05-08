@@ -757,7 +757,7 @@
                 <tbody>
                   {% for row in pdata.get("rows", []) %}
                   <tr>
-                    <td class="search-song-name">{% if plat == "qq" and row.get("song_mid") %}<a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ row.get("song_mid") }}&type={{ row.get("song_mid") }}&openinqqmusic=0" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif plat == "kugou" %}{% if row.get("mixsongid") %}<a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
+                    <td class="search-song-name">{% if plat == "qq" and row.get("song_mid") %}<a href="/song-heat?mid={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif plat == "kugou" %}{% if row.get("mixsongid") %}<a href="/song-heat-kugou?mixsongid={{ row.get("mixsongid") }}" target="_blank" rel="noopener noreferrer" title="打开歌曲热度页">{{ row.get("song_name") }}</a>{% elif row.get("song_mid") %}<a href="https://www.kugou.com/song/#hash={{ row.get("song_mid") }}" target="_blank" rel="noopener noreferrer" title="打开酷狗播放页">{{ row.get("song_name") }}</a>{% else %}{{ row.get("song_name") }}{% endif %}{% else %}{{ row.get("song_name") }}{% endif %}</td>
                     <td>{{ row.get("album_name") }}</td>
                     <td>{{ row.get("favorite_count") }}</td>
                   </tr>
@@ -831,6 +831,84 @@
       </div>
     </div>
   </div>
+  </div>
+
+  <div class="block block--full">
+    <div class="block-head">
+      <h3>7) 歌手歌曲数据 (QQ音乐)</h3>
+      <button type="button" class="block-toggle" data-target="block-artist-songs-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-artist-songs-body" class="block-body--collapsible">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
+        <button type="button" id="artist-search-btn"
+          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
+        <span id="artist-search-status" style="color:var(--muted);font-size:13px;"></span>
+      </div>
+      <div id="artist-songs-err" class="err" style="display:none;"></div>
+      <table id="artist-songs-table" style="display:none;">
+        <thead>
+          <tr><th>#</th><th>歌曲</th><th>收藏量</th><th>热度指数</th><th>在听人数</th></tr>
+        </thead>
+        <tbody id="artist-songs-tbody"></tbody>
+      </table>
+      <div style="text-align:center;margin-top:8px;">
+        <button type="button" id="artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="block block--full">
+    <div class="block-head">
+      <h3>8) 歌手歌曲数据 (酷狗音乐)</h3>
+      <button type="button" class="block-toggle" data-target="block-kg-artist-songs-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-kg-artist-songs-body" class="block-body--collapsible">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="kg-artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
+        <button type="button" id="kg-artist-search-btn"
+          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
+        <span id="kg-artist-search-status" style="color:var(--muted);font-size:13px;"></span>
+      </div>
+      <div id="kg-artist-songs-err" class="err" style="display:none;"></div>
+      <table id="kg-artist-songs-table" style="display:none;">
+        <thead>
+          <tr><th>#</th><th>歌曲</th><th>收藏量</th><th>酷狗指数</th><th>收听人数</th></tr>
+        </thead>
+        <tbody id="kg-artist-songs-tbody"></tbody>
+      </table>
+      <div style="text-align:center;margin-top:8px;">
+        <button type="button" id="kg-artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="block block--full">
+    <div class="block-head">
+      <h3>9) 歌手歌曲数据 (网易云音乐)</h3>
+      <button type="button" class="block-toggle" data-target="block-ne-artist-songs-body" aria-expanded="false">显示</button>
+    </div>
+    <div id="block-ne-artist-songs-body" class="block-body--collapsible">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <input type="text" id="ne-artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
+          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
+        <button type="button" id="ne-artist-search-btn"
+          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
+        <span id="ne-artist-search-status" style="color:var(--muted);font-size:13px;"></span>
+      </div>
+      <div id="ne-artist-songs-err" class="err" style="display:none;"></div>
+      <table id="ne-artist-songs-table" style="display:none;">
+        <thead>
+          <tr><th>#</th><th>歌曲</th><th>收藏量</th></tr>
+        </thead>
+        <tbody id="ne-artist-songs-tbody"></tbody>
+      </table>
+      <div style="text-align:center;margin-top:8px;">
+        <button type="button" id="ne-artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1081,15 +1159,14 @@
         var songMid = row.song_mid || "";
         var mixsongid = row.mixsongid;
         if (plat === "qq" && songMid) {
-          return "<a href=\"https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid="
+          return "<a href=\"/song-heat?mid="
             + encodeURIComponent(songMid)
-            + "&type=" + encodeURIComponent(songMid)
-            + "&openinqqmusic=0\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开歌曲热度页\">"
+            + "\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开歌曲热度页\">"
             + name + "</a>";
         }
         if (plat === "kugou") {
           if (mixsongid != null && mixsongid !== "") {
-            return "<a href=\"https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid="
+            return "<a href=\"/song-heat-kugou?mixsongid="
               + encodeURIComponent(String(mixsongid))
               + "\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开歌曲热度页\">"
               + name + "</a>";
@@ -1512,11 +1589,11 @@
         var mid = row.song_mid || "";
         var mix = row.mixsongid;
         if (platform === "qq" && mid) {
-          return "https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid=" + encodeURIComponent(mid) + "&type=" + encodeURIComponent(mid) + "&openinqqmusic=0";
+          return "/song-heat?mid=" + encodeURIComponent(mid);
         }
         if (platform === "kugou") {
           if (mix != null && mix !== "") {
-            return "https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid=" + encodeURIComponent(String(mix));
+            return "/song-heat-kugou?mixsongid=" + encodeURIComponent(String(mix));
           }
           if (mid) {
             return "https://www.kugou.com/song/#hash=" + encodeURIComponent(mid);
@@ -1600,12 +1677,22 @@
             axisTick: { show: false },
             axisLine: { lineStyle: { color: palette.border } },
             axisLabel: {
-              color: palette.text,
+              color: palette.primary || palette.text,
               interval: 0,
               width: 140,
               overflow: "truncate",
-              margin: 8
-            }
+              margin: 8,
+              textStyle: { textBorderWidth: 0 },
+              formatter: function(val) { return '{link|' + val + '}'; },
+              rich: {
+                link: {
+                  color: palette.primary || palette.text,
+                  textDecoration: 'underline',
+                  fontSize: 12
+                }
+              }
+            },
+            triggerEvent: true
           },
           series: [{
             type: "bar",
@@ -1636,7 +1723,12 @@
         });
         chart.off("click");
         chart.on("click", function (p) {
-          var idx = p && p.dataIndex != null ? p.dataIndex : -1;
+          var idx = -1;
+          if (p.componentType === "yAxis") {
+            idx = yLabels.indexOf(p.value);
+          } else {
+            idx = p && p.dataIndex != null ? p.dataIndex : -1;
+          }
           var row = idx >= 0 ? state[idx] : null;
           if (row && row.url) window.open(row.url, "_blank", "noopener,noreferrer");
         });
@@ -1769,6 +1861,283 @@
         loadToplistHistory(false);
         pollCrawlTrackStatus();
       }, 20 * 1000);
+      // ============ 歌手歌曲数据 ============
+      var artistSongsMid = "";
+      var artistSongsOffset = 0;
+
+      document.getElementById("artist-search-btn").addEventListener("click", function() {
+        var name = document.getElementById("artist-search-input").value.trim();
+        if (!name) return;
+        var status = document.getElementById("artist-search-status");
+        status.textContent = "搜索中...";
+        document.getElementById("artist-songs-err").style.display = "none";
+        document.getElementById("artist-songs-table").style.display = "none";
+        document.getElementById("artist-songs-more-btn").style.display = "none";
+        document.getElementById("artist-songs-tbody").innerHTML = "";
+        artistSongsOffset = 0;
+
+        fetch("/api/search-artist?name=" + encodeURIComponent(name) + "&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.ok) {
+              status.textContent = "";
+              var err = document.getElementById("artist-songs-err");
+              err.textContent = data.error || "搜索失败";
+              err.style.display = "block";
+              return;
+            }
+            artistSongsMid = data.artist_mid;
+            status.textContent = "歌手: " + data.artist_name;
+            loadArtistSongs();
+          })
+          .catch(function(e) {
+            status.textContent = "";
+            var err = document.getElementById("artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      });
+
+      document.getElementById("artist-search-input").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") document.getElementById("artist-search-btn").click();
+      });
+
+      document.getElementById("artist-songs-more-btn").addEventListener("click", function() {
+        loadArtistSongs();
+      });
+
+      function loadArtistSongs() {
+        if (!artistSongsMid) return;
+        var moreBtn = document.getElementById("artist-songs-more-btn");
+        moreBtn.textContent = "加载中...";
+        moreBtn.disabled = true;
+
+        fetch("/api/artist-songs-heat?artist_mid=" + encodeURIComponent(artistSongsMid) +
+          "&offset=" + artistSongsOffset + "&limit=10&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            moreBtn.disabled = false;
+            if (!data.ok) {
+              var err = document.getElementById("artist-songs-err");
+              err.textContent = data.error || "获取失败";
+              err.style.display = "block";
+              moreBtn.style.display = "none";
+              return;
+            }
+            var tbody = document.getElementById("artist-songs-tbody");
+            data.songs.forEach(function(s) {
+              var tr = document.createElement("tr");
+              var nameHtml = s.song_mid
+                ? "<a href=\"/song-heat?mid=" + encodeURIComponent(s.song_mid) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
+                : escapeHtml(s.song_name);
+              tr.innerHTML = "<td>" + s.index + "</td>"
+                + "<td>" + nameHtml + "</td>"
+                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
+                + "<td>" + (s.heat_index != null ? numberFmt(s.heat_index) : "-") + "</td>"
+                + "<td>" + (s.now_listen_users != null ? numberFmt(s.now_listen_users) : "-") + "</td>";
+              tbody.appendChild(tr);
+            });
+            document.getElementById("artist-songs-table").style.display = "";
+            artistSongsOffset += data.songs.length;
+            if (data.has_more && data.songs.length > 0) {
+              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
+              moreBtn.style.display = "";
+            } else {
+              moreBtn.style.display = "none";
+            }
+          })
+          .catch(function(e) {
+            moreBtn.disabled = false;
+            moreBtn.textContent = "▼ 加载更多";
+            var err = document.getElementById("artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      }
+
+      // ============ 酷狗歌手歌曲数据 ============
+      var kgSingerId = "";
+      var kgOffset = 0;
+
+      document.getElementById("kg-artist-search-btn").addEventListener("click", function() {
+        var name = document.getElementById("kg-artist-search-input").value.trim();
+        if (!name) return;
+        var status = document.getElementById("kg-artist-search-status");
+        status.textContent = "搜索中...";
+        document.getElementById("kg-artist-songs-err").style.display = "none";
+        document.getElementById("kg-artist-songs-table").style.display = "none";
+        document.getElementById("kg-artist-songs-more-btn").style.display = "none";
+        document.getElementById("kg-artist-songs-tbody").innerHTML = "";
+        kgOffset = 0;
+
+        fetch("/api/search-artist-kugou?name=" + encodeURIComponent(name) + "&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.ok) {
+              status.textContent = "";
+              var err = document.getElementById("kg-artist-songs-err");
+              err.textContent = data.error || "搜索失败";
+              err.style.display = "block";
+              return;
+            }
+            kgSingerId = data.singerid;
+            status.textContent = "歌手: " + data.singername;
+            loadKgArtistSongs();
+          })
+          .catch(function(e) {
+            status.textContent = "";
+            var err = document.getElementById("kg-artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      });
+
+      document.getElementById("kg-artist-search-input").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") document.getElementById("kg-artist-search-btn").click();
+      });
+
+      document.getElementById("kg-artist-songs-more-btn").addEventListener("click", function() {
+        loadKgArtistSongs();
+      });
+
+      function loadKgArtistSongs() {
+        if (!kgSingerId) return;
+        var moreBtn = document.getElementById("kg-artist-songs-more-btn");
+        moreBtn.textContent = "加载中...";
+        moreBtn.disabled = true;
+
+        fetch("/api/artist-songs-heat-kugou?singerid=" + encodeURIComponent(kgSingerId) +
+          "&offset=" + kgOffset + "&limit=10&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            moreBtn.disabled = false;
+            if (!data.ok) {
+              var err = document.getElementById("kg-artist-songs-err");
+              err.textContent = data.error || "获取失败";
+              err.style.display = "block";
+              moreBtn.style.display = "none";
+              return;
+            }
+            var tbody = document.getElementById("kg-artist-songs-tbody");
+            data.songs.forEach(function(s) {
+              var tr = document.createElement("tr");
+              var nameHtml = s.mixsongid
+                ? "<a href=\"/song-heat-kugou?mixsongid=" + encodeURIComponent(String(s.mixsongid)) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
+                : escapeHtml(s.song_name);
+              tr.innerHTML = "<td>" + s.index + "</td>"
+                + "<td>" + nameHtml + "</td>"
+                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
+                + "<td>" + (s.exponent != null ? numberFmt(Math.round(s.exponent)) : "-") + "</td>"
+                + "<td>" + (s.listener_num != null ? numberFmt(s.listener_num) : "-") + "</td>";
+              tbody.appendChild(tr);
+            });
+            document.getElementById("kg-artist-songs-table").style.display = "";
+            kgOffset += data.songs.length;
+            if (data.has_more && data.songs.length > 0) {
+              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
+              moreBtn.style.display = "";
+            } else {
+              moreBtn.style.display = "none";
+            }
+          })
+          .catch(function(e) {
+            moreBtn.disabled = false;
+            moreBtn.textContent = "▼ 加载更多";
+            var err = document.getElementById("kg-artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      }
+
+      // ============ 网易云歌手歌曲数据 ============
+      var neArtistId = "";
+      var neOffset = 0;
+
+      document.getElementById("ne-artist-search-btn").addEventListener("click", function() {
+        var name = document.getElementById("ne-artist-search-input").value.trim();
+        if (!name) return;
+        var status = document.getElementById("ne-artist-search-status");
+        status.textContent = "搜索中...";
+        document.getElementById("ne-artist-songs-err").style.display = "none";
+        document.getElementById("ne-artist-songs-table").style.display = "none";
+        document.getElementById("ne-artist-songs-more-btn").style.display = "none";
+        document.getElementById("ne-artist-songs-tbody").innerHTML = "";
+        neOffset = 0;
+
+        fetch("/api/search-artist-netease?name=" + encodeURIComponent(name) + "&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.ok) {
+              status.textContent = "";
+              var err = document.getElementById("ne-artist-songs-err");
+              err.textContent = data.error || "搜索失败";
+              err.style.display = "block";
+              return;
+            }
+            neArtistId = data.artist_id;
+            status.textContent = "歌手: " + data.artist_name;
+            loadNeArtistSongs();
+          })
+          .catch(function(e) {
+            status.textContent = "";
+            var err = document.getElementById("ne-artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      });
+
+      document.getElementById("ne-artist-search-input").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") document.getElementById("ne-artist-search-btn").click();
+      });
+
+      document.getElementById("ne-artist-songs-more-btn").addEventListener("click", function() {
+        loadNeArtistSongs();
+      });
+
+      function loadNeArtistSongs() {
+        if (!neArtistId) return;
+        var moreBtn = document.getElementById("ne-artist-songs-more-btn");
+        moreBtn.textContent = "加载中...";
+        moreBtn.disabled = true;
+
+        fetch("/api/artist-songs-heat-netease?artist_id=" + encodeURIComponent(neArtistId) +
+          "&offset=" + neOffset + "&limit=10&_=" + Date.now())
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            moreBtn.disabled = false;
+            if (!data.ok) {
+              var err = document.getElementById("ne-artist-songs-err");
+              err.textContent = data.error || "获取失败";
+              err.style.display = "block";
+              moreBtn.style.display = "none";
+              return;
+            }
+            var tbody = document.getElementById("ne-artist-songs-tbody");
+            data.songs.forEach(function(s) {
+              var tr = document.createElement("tr");
+              tr.innerHTML = "<td>" + s.index + "</td>"
+                + "<td>" + escapeHtml(s.song_name) + "</td>"
+                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>";
+              tbody.appendChild(tr);
+            });
+            document.getElementById("ne-artist-songs-table").style.display = "";
+            neOffset += data.songs.length;
+            if (data.has_more && data.songs.length > 0) {
+              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
+              moreBtn.style.display = "";
+            } else {
+              moreBtn.style.display = "none";
+            }
+          })
+          .catch(function(e) {
+            moreBtn.disabled = false;
+            moreBtn.textContent = "▼ 加载更多";
+            var err = document.getElementById("ne-artist-songs-err");
+            err.textContent = "请求失败: " + e.message;
+            err.style.display = "block";
+          });
+      }
+
     })();
   </script>
   </div>

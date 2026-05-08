@@ -13,6 +13,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from loguru import logger
+import httpx
 
 from . import schedulers as _sched
 from .config import settings
@@ -35,6 +37,10 @@ from .web_service import (
     resolve_data_paths_for_debug,
 )
 from .web_service.milestones import prune_milestone_logs_sub_10k_entries
+from .heat_scraper import get_song_heat, close_browser, fetch_batch_listen_users
+from .heat_api import get_songs_heat_batch
+from .client import QQMusicClient
+from .kugou_heat_scraper import get_kugou_song_heat, close_kg_browser, fetch_batch_kugou_heat
 
 app = FastAPI(title="Music Crawler Web")
 
@@ -213,7 +219,7 @@ def _toplist_run_now_payload() -> Dict[str, Any]:
 
 
 @app.on_event("startup")
-def _start_schedulers() -> None:
+async def _start_schedulers() -> None:
     prune_milestone_logs_sub_10k_entries(PROJECT_ROOT)
     _sched.start_background_schedulers(PROJECT_ROOT)
 
@@ -400,6 +406,16 @@ async def api_toplist_check_run_now() -> JSONResponse:
     return JSONResponse(payload)
 
 
+@app.post("/api/crawl-track/run-now")
+async def api_crawl_track_run_now() -> JSONResponse:
+    """立即执行一次三平台快照抓取。"""
+    def _run():
+        _sched._run_crawl_track_round()
+        return {"ok": True}
+    payload = await _run_in_thread(_run)
+    return JSONResponse(payload)
+
+
 @app.get("/api/milestone-logs")
 async def api_milestone_logs(limit: int = 500) -> JSONResponse:
     """里程碑日志：三平台收藏量节点，按时间倒序。"""
@@ -459,4 +475,306 @@ async def api_report_chart(
         base_dir=PROJECT_ROOT,
     )
     return JSONResponse(data)
+
+
+@app.get("/song-heat-kugou", response_class=HTMLResponse)
+async def song_heat_kugou_page(request: Request, mixsongid: str = "") -> HTMLResponse:
+    """酷狗歌曲热度详情页面。"""
+    context = _base_context("kugou")
+    context["request"] = request
+    context["mixsongid"] = (mixsongid or "").strip()
+    return templates.TemplateResponse("song_heat_kugou.html", context)
+
+
+@app.get("/api/song-heat-kugou")
+async def api_song_heat_kugou(mixsongid: str = "") -> JSONResponse:
+    """获取酷狗歌曲热度数据。"""
+    mid = (mixsongid or "").strip()
+    if not mid:
+        return JSONResponse({"ok": False, "error": "缺少 mixsongid 参数"})
+    data = await get_kugou_song_heat(mid)
+    return JSONResponse(data)
+
+
+@app.get("/song-heat", response_class=HTMLResponse)
+async def song_heat_page(request: Request, mid: str = "") -> HTMLResponse:
+    """歌曲热度详情页面。"""
+    context = _base_context("qq")
+    context["request"] = request
+    context["song_mid"] = (mid or "").strip()
+    return templates.TemplateResponse("song_heat.html", context)
+
+
+@app.get("/api/search-artist")
+async def api_search_artist(name: str = "") -> JSONResponse:
+    """通过歌手名搜索 artist_mid（QQ音乐 SmartBox 接口）。"""
+    keyword = (name or "").strip()
+    if not keyword:
+        return JSONResponse({"ok": False, "error": "缺少歌手名"})
+
+    def _search():
+        with httpx.Client(timeout=10, headers={
+            "Referer": "https://y.qq.com/",
+            "User-Agent": "Mozilla/5.0",
+        }) as client:
+            resp = client.get(
+                "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg",
+                params={"key": keyword, "format": "json", "inCharset": "utf-8", "outCharset": "utf-8"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    data = await _run_in_thread(_search)
+    singers = data.get("data", {}).get("singer", {}).get("itemlist", [])
+    if not singers:
+        return JSONResponse({"ok": False, "error": f"未找到歌手「{keyword}」"})
+    first = singers[0]
+    return JSONResponse({
+        "ok": True,
+        "artist_mid": first.get("mid"),
+        "artist_name": first.get("name"),
+        "artist_id": first.get("id"),
+    })
+
+
+@app.get("/api/artist-songs-heat")
+async def api_artist_songs_heat(
+    artist_mid: str = "",
+    offset: int = 0,
+    limit: int = 10,
+) -> JSONResponse:
+    """获取歌手的歌曲列表 + 收藏量 + 热度指数 + 在听人数。"""
+    mid = (artist_mid or "").strip()
+    if not mid:
+        return JSONResponse({"ok": False, "error": "缺少 artist_mid"})
+    limit = min(max(1, limit), 20)
+
+    def _fetch_songs():
+        client = QQMusicClient(base_url="https://u.y.qq.com/cgi-bin/musicu.fcg")
+        try:
+            page_num = offset // limit + 1
+            songs = client.fetch_songs_by_artist(mid, page_num, limit)
+            return songs
+        finally:
+            client.close()
+
+    songs = await _run_in_thread(_fetch_songs)
+
+    # 收藏量和热度数据并发获取
+    song_ids = [s.get("id") for s in songs if s.get("id")]
+    song_mids = [s.get("mid") for s in songs if s.get("mid")]
+
+    import asyncio as _aio
+
+    async def _get_favs():
+        if not song_ids:
+            return {}
+        def _f():
+            c = QQMusicClient(base_url="https://u.y.qq.com/cgi-bin/musicu.fcg")
+            try:
+                return c.fetch_song_favorite_counts(song_ids)
+            finally:
+                c.close()
+        return await _run_in_thread(_f)
+
+    async def _get_heat():
+        if not song_mids:
+            return {}
+        return await _run_in_thread(fetch_batch_listen_users, song_mids)
+
+    fav_map, heat_listen_map = await _aio.gather(_get_favs(), _get_heat())
+
+    # 组装结果
+    result_songs = []
+    for i, s in enumerate(songs):
+        sid = s.get("id")
+        smid = s.get("mid", "")
+        fav = fav_map.get(sid)
+        hl = heat_listen_map.get(smid, {})
+        result_songs.append({
+            "index": offset + i + 1,
+            "song_name": s.get("name") or s.get("title") or "",
+            "song_mid": smid,
+            "favorite_count": fav,
+            "heat_index": hl.get("score") if isinstance(hl, dict) else None,
+            "now_listen_users": hl.get("cnt") if isinstance(hl, dict) else None,
+        })
+
+    return JSONResponse({
+        "ok": True,
+        "songs": result_songs,
+        "has_more": len(songs) >= limit,
+    })
+
+
+@app.get("/api/song-heat")
+async def api_song_heat(song_mid: str = "", last_days: int = 1) -> JSONResponse:
+    """获取歌曲热度数据（纯 API + 加密接口混合）。"""
+    mid = (song_mid or "").strip()
+    if not mid:
+        return JSONResponse({"ok": False, "error": "缺少 song_mid 参数"})
+    last_days = max(1, min(last_days, 365))
+    data = await get_song_heat(mid, last_days=last_days)
+    return JSONResponse(data)
+
+
+@app.get("/api/search-artist-netease")
+async def api_search_artist_netease(name: str = "") -> JSONResponse:
+    """通过歌手名搜索网易云歌手 ID。"""
+    keyword = (name or "").strip()
+    if not keyword:
+        return JSONResponse({"ok": False, "error": "缺少歌手名"})
+
+    def _search():
+        from .netease_client import NeteaseMusicClient
+        c = NeteaseMusicClient()
+        try:
+            return c.search_artists_by_name(keyword, limit=5)
+        finally:
+            c.close()
+
+    artists = await _run_in_thread(_search)
+    if not artists:
+        return JSONResponse({"ok": False, "error": f"未找到歌手「{keyword}」"})
+    first = artists[0]
+    return JSONResponse({
+        "ok": True,
+        "artist_id": first.get("singer_mid"),
+        "artist_name": first.get("singer_name"),
+    })
+
+
+@app.get("/api/artist-songs-heat-netease")
+async def api_artist_songs_heat_netease(
+    artist_id: str = "",
+    offset: int = 0,
+    limit: int = 10,
+) -> JSONResponse:
+    """获取网易云歌手的歌曲列表 + 收藏量 + 热度。"""
+    aid = (artist_id or "").strip()
+    if not aid:
+        return JSONResponse({"ok": False, "error": "缺少 artist_id"})
+    limit = min(max(1, limit), 20)
+
+    def _fetch():
+        from .netease_client import NeteaseMusicClient
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        c = NeteaseMusicClient(rate_limit_qps=100)
+        try:
+            page_num = offset // limit + 1
+            songs = c.fetch_songs_by_artist(aid, page_num, limit)
+            # 并发获取收藏量
+            fav_map = {}
+            song_ids = [int(s["id"]) for s in songs if s.get("id")]
+            if song_ids:
+                with ThreadPoolExecutor(max_workers=min(len(song_ids), 10)) as pool:
+                    futures = {pool.submit(c._fetch_song_red_count, sid): sid for sid in song_ids}
+                    for f in as_completed(futures):
+                        sid = futures[f]
+                        try:
+                            fav_map[sid] = f.result()
+                        except Exception:
+                            pass
+            return songs, fav_map
+        finally:
+            c.close()
+
+    songs, fav_map = await _run_in_thread(_fetch)
+
+    result_songs = []
+    for i, s in enumerate(songs):
+        sid = s.get("id")
+        fav = fav_map.get(sid) if sid else None
+        result_songs.append({
+            "index": offset + i + 1,
+            "song_name": s.get("name") or "",
+            "song_id": sid,
+            "favorite_count": fav if fav else None,
+        })
+
+    return JSONResponse({
+        "ok": True,
+        "songs": result_songs,
+        "has_more": len(songs) >= limit,
+    })
+
+
+@app.get("/api/search-artist-kugou")
+async def api_search_artist_kugou(name: str = "") -> JSONResponse:
+    """通过歌手名搜索酷狗歌手 ID。"""
+    keyword = (name or "").strip()
+    if not keyword:
+        return JSONResponse({"ok": False, "error": "缺少歌手名"})
+
+    def _search():
+        from .kugou_client import KugouMusicClient
+        c = KugouMusicClient()
+        try:
+            return c.search_artists_by_name(keyword, limit=5)
+        finally:
+            c.close()
+
+    artists = await _run_in_thread(_search)
+    if not artists:
+        return JSONResponse({"ok": False, "error": f"未找到歌手「{keyword}」"})
+    first = artists[0]
+    return JSONResponse({
+        "ok": True,
+        "singerid": first.get("singer_mid"),
+        "singername": first.get("singer_name"),
+    })
+
+
+@app.get("/api/artist-songs-heat-kugou")
+async def api_artist_songs_heat_kugou(
+    singerid: str = "",
+    offset: int = 0,
+    limit: int = 10,
+) -> JSONResponse:
+    """获取酷狗歌手的歌曲列表 + 收藏量 + 热度指数 + 收听人数。"""
+    sid = (singerid or "").strip()
+    if not sid:
+        return JSONResponse({"ok": False, "error": "缺少 singerid"})
+    limit = min(max(1, limit), 20)
+
+    def _fetch_songs():
+        from .kugou_client import KugouMusicClient
+        c = KugouMusicClient()
+        try:
+            page_num = offset // limit + 1
+            return c.fetch_songs_by_artist(sid, page_num, limit)
+        finally:
+            c.close()
+
+    songs = await _run_in_thread(_fetch_songs)
+
+    # 热度 API 已包含 collect_count，无需单独调收藏量接口
+    mixsongids = [str(s.get("mixsongid")) for s in songs if s.get("mixsongid")]
+    heat_map = await _run_in_thread(fetch_batch_kugou_heat, mixsongids) if mixsongids else {}
+
+    result_songs = []
+    for i, s in enumerate(songs):
+        mixid = s.get("mixsongid")
+        mixid_str = str(mixid) if mixid is not None else ""
+        ht = heat_map.get(mixid_str, {})
+        result_songs.append({
+            "index": offset + i + 1,
+            "song_name": s.get("name") or "",
+            "mixsongid": mixid,
+            "favorite_count": ht.get("collect_count"),
+            "exponent": ht.get("exponent"),
+            "listener_num": ht.get("listener_num"),
+        })
+
+    return JSONResponse({
+        "ok": True,
+        "songs": result_songs,
+        "has_more": len(songs) >= limit,
+    })
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    await close_browser()
+    await close_kg_browser()
 

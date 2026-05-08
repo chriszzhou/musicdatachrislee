@@ -1,0 +1,20 @@
+---
+description: 本仓库统一使用 Python 3.9 运行与说明命令
+alwaysApply: true
+---
+
+# Python 版本（3.9）
+
+- **解释器**：终端、脚本、CI、文档中的示例命令一律使用 **`python3.9`**（若系统通过 `pyenv` / `asdf` 提供，则优先用已激活的 3.9 环境对应的 `python`）。
+- **禁止**：默认用 `python3` / `python` 且未确认版本（易混用 3.8、3.10 等，曾导致依赖与行为不一致）。
+- **虚拟环境**：新建 venv 时使用 `python3.9 -m venv .venv`，激活后仍须保证 `python --version` 为 3.9.x。
+- **项目元数据**：`requires-python` / `python_requires` 已对齐为 `>=3.9`；本地请安装 3.9 再开发。
+
+示例：
+
+```bash
+python3.9 -m venv .venv
+source .venv/bin/activate
+PYTHONPATH=src python3.9 -m pytest
+PYTHONPATH=src python3.9 scripts/run_qishui_search_once.py "李宇春"
+```

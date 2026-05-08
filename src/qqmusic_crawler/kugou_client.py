@@ -331,11 +331,8 @@ class KugouMusicClient:
             return songs
 
         logger.info(
-            "Kugou metric enrichment start: songs={}, workers={}, batch_size={}, qps={}",
+            "Kugou metric enrichment start: songs={}",
             len(songs),
-            self._metric_workers,
-            self._metric_batch_size,
-            self.rate_limit_qps,
         )
         started_at = time.monotonic()
 
@@ -415,25 +412,29 @@ class KugouMusicClient:
         unique_ids = list(dict.fromkeys([x for x in mixsongids if x > 0]))
         if not unique_ids:
             return result
-        for chunk in self._chunked_ints(unique_ids, self._metric_batch_size):
-            data = self._signed_get_android(
-                "/count/v1/audio/mget_collect",
-                {"mixsongids": ",".join([str(x) for x in chunk])},
-            )
-            rows = data.get("data", {}).get("list", [])
-            if not isinstance(rows, list):
-                continue
-            for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                try:
-                    mid = int(row.get("mixsongid") or 0)
-                    cnt = int(row.get("count") or 0)
-                except (TypeError, ValueError):
-                    continue
-                if mid > 0:
-                    result[mid] = cnt
+        chunks = self._chunked_ints(unique_ids, self._metric_batch_size)
+        for chunk in chunks:
+            self._fetch_fav_chunk(chunk, result)
         return result
+
+    def _fetch_fav_chunk(self, chunk: List[int], result: Dict[int, int]) -> None:
+        data = self._signed_get_android(
+            "/count/v1/audio/mget_collect",
+            {"mixsongids": ",".join([str(x) for x in chunk])},
+        )
+        rows = data.get("data", {}).get("list", [])
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                mid = int(row.get("mixsongid") or 0)
+                cnt = int(row.get("count") or 0)
+            except (TypeError, ValueError):
+                continue
+            if mid > 0:
+                result[mid] = cnt
 
     def fetch_toplists(self) -> List[Dict[str, Any]]:
         data = self._get_json("/rank/list", {"json": "true"}, host="https://m.kugou.com")

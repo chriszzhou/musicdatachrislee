@@ -572,6 +572,8 @@
     <h1 class="title">变化报告</h1>
     <div class="header-actions">
       <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+      <button type="button" id="crawl-now-btn" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--primary);color:#fff;cursor:pointer;">立即抓取快照</button>
+      <span id="crawl-now-status" style="color:var(--muted);font-size:13px;"></span>
     </div>
   </div>
 
@@ -1203,6 +1205,35 @@
         syncInputByMode();
       })();
 
+    })();
+
+    // 立即抓取快照
+    (function() {
+      var btn = document.getElementById("crawl-now-btn");
+      var status = document.getElementById("crawl-now-status");
+      if (!btn) return;
+      btn.addEventListener("click", function() {
+        btn.disabled = true;
+        btn.textContent = "抓取中...";
+        status.textContent = "三平台并发抓取，请稍候...";
+        fetch("/api/crawl-track/run-now", { method: "POST" })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            btn.disabled = false;
+            btn.textContent = "立即抓取快照";
+            if (data.ok) {
+              status.textContent = "抓取完成 ✓";
+              setTimeout(function() { status.textContent = ""; }, 5000);
+            } else {
+              status.textContent = "失败: " + (data.error || "未知错误");
+            }
+          })
+          .catch(function(e) {
+            btn.disabled = false;
+            btn.textContent = "立即抓取快照";
+            status.textContent = "请求失败: " + e.message;
+          });
+      });
     })();
   </script>
   </div>

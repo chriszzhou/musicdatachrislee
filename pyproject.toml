@@ -19,6 +19,7 @@ dependencies = [
   "sqlalchemy>=2.0.31",
   "tenacity>=8.5.0",
   "uvicorn>=0.30.0",
+  "cryptography>=41.0.0",
 ]
 
 [tool.setuptools]

@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     kugou_base_url: str = Field(default="http://mobilecdn.kugou.com", alias="KUGOU_BASE_URL")
     qqmusic_timeout: int = Field(default=15, alias="QQMUSIC_TIMEOUT")
     qqmusic_max_retries: int = Field(default=3, alias="QQMUSIC_MAX_RETRIES")
-    qqmusic_rate_limit_qps: float = Field(default=1.0, alias="QQMUSIC_RATE_LIMIT_QPS")
-    netease_rate_limit_qps: float = Field(default=8.0, alias="NETEASE_RATE_LIMIT_QPS")
-    netease_metric_workers: int = Field(default=8, alias="NETEASE_METRIC_WORKERS")
+    qqmusic_rate_limit_qps: float = Field(default=5.0, alias="QQMUSIC_RATE_LIMIT_QPS")
+    netease_rate_limit_qps: float = Field(default=30.0, alias="NETEASE_RATE_LIMIT_QPS")
+    netease_metric_workers: int = Field(default=20, alias="NETEASE_METRIC_WORKERS")
     netease_metric_batch_size: int = Field(default=10, alias="NETEASE_METRIC_BATCH_SIZE")
     kugou_rate_limit_qps: float = Field(default=5.0, alias="KUGOU_RATE_LIMIT_QPS")
     kugou_metric_workers: int = Field(default=8, alias="KUGOU_METRIC_WORKERS")
@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # ---------- 业务可调（可放在 .env.qqmc）----------
     qqmc_new_song_artist: str = Field(default="李宇春", alias="QQMC_NEW_SONG_ARTIST")
     qqmc_new_song_name: str = Field(default="春雨里", alias="QQMC_NEW_SONG_NAME")
+    qqmc_new_song_mid_qq: str = Field(default="", alias="QQMC_NEW_SONG_MID_QQ")
+    qqmc_new_song_mid_netease: str = Field(default="", alias="QQMC_NEW_SONG_MID_NETEASE")
+    qqmc_new_song_mid_kugou: str = Field(default="", alias="QQMC_NEW_SONG_MID_KUGOU")
     qqmc_new_song_chart_start_date: str = Field(
         default="2026-03-16", alias="QQMC_NEW_SONG_CHART_START_DATE"
     )

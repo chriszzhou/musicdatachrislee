@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>歌曲热度</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f141d;
+      --card: #171f2b;
+      --border: #2a3547;
+      --text: #d7e1f0;
+      --muted: #93a4ba;
+      --primary: #5f8fd6;
+      --primary-deep: #4f7fc8;
+      --error-bg: #341c22;
+      --error-text: #ffa2b1;
+      --table-head-bg: #202a3a;
+      --table-row-even: #141c27;
+      --card-soft: #121a26;
+      --shadow-soft: 0 10px 24px rgba(6, 10, 20, 0.32);
+      --chart-grid: rgba(154, 172, 191, 0.2);
+      --green: #34d399;
+      --red: #f87171;
+    }
+    body[data-theme="light"] {
+      --bg: #f4f7ff;
+      --card: #ffffff;
+      --border: #e3e8f5;
+      --text: #1f2a44;
+      --muted: #65708a;
+      --primary: #3b82f6;
+      --primary-deep: #2563eb;
+      --error-bg: #fef2f2;
+      --error-text: #b91c1c;
+      --table-head-bg: #f0f4ff;
+      --table-row-even: #fafcff;
+      --card-soft: #fbfdff;
+      --shadow-soft: 0 8px 24px rgba(30, 70, 140, 0.08);
+      --chart-grid: rgba(148, 163, 184, 0.28);
+      --green: #059669;
+      --red: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(0deg, rgba(15, 22, 34, 0.70), rgba(15, 22, 34, 0.70)),
+        url("/scripts/2.jpg") center center / cover no-repeat fixed;
+      line-height: 1.55;
+    }
+    body[data-theme="light"] {
+      background:
+        linear-gradient(0deg, rgba(244, 248, 255, 0.70), rgba(244, 248, 255, 0.70)),
+        url("/scripts/2.jpg") center center / cover no-repeat fixed;
+    }
+    .page {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 14px 18px 24px;
+    }
+    .header-card {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow-soft);
+      margin-bottom: 12px;
+    }
+    .header-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(150, 182, 230, 0.18) 0%, rgba(11, 20, 34, 0.04) 100%);
+      pointer-events: none;
+    }
+    .header-card > * { position: relative; z-index: 2; }
+    body[data-theme="light"] .header-card {
+      background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+    }
+    .title { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+    .header-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .nav-links a { color: var(--primary); text-decoration: none; margin-right: 14px; }
+    .nav-links a:hover { text-decoration: underline; }
+    button.theme-toggle {
+      min-height: 30px; padding: 5px 12px; border-radius: 999px; font-size: 12px;
+      border: 1px solid var(--border); background: #1f2c3f; color: #d7e4fa; cursor: pointer;
+    }
+    body[data-theme="light"] button.theme-toggle { background: #fff; color: #334155; }
+
+    .block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px 12px;
+      margin-top: 12px;
+      box-shadow: var(--shadow-soft);
+    }
+    .block h3 { margin: 0 0 10px; font-size: 17px; font-weight: 650; }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .metric-item {
+      background: var(--card-soft);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 2px;
+    }
+    .metric-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .metric-value.up { color: var(--green); }
+    .metric-value.down { color: var(--red); }
+
+    .record-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .record-list li {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    .record-list li:last-child { border-bottom: none; }
+
+    .chart-wrap {
+      width: 100%;
+      height: 260px;
+      padding: 16px;
+      background: var(--card-soft);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
+      margin-top: 10px;
+    }
+
+    .loading { text-align: center; color: var(--muted); padding: 20px; }
+    .err { color: var(--error-text); background: var(--error-bg); padding: 8px 12px; border-radius: 8px; margin-top: 8px; display: none; }
+    .range-btn {
+      padding: 5px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      border: 1px solid var(--border); background: var(--card-soft); color: var(--muted); cursor: pointer;
+    }
+    .range-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .range-btn:hover:not(.active) { background: rgba(95,143,214,0.15); }
+
+    @media (max-width: 600px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .chart-wrap { height: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header-card">
+      <h1 class="title" id="song-title">歌曲热度</h1>
+      <p class="subtitle" id="song-subtitle">加载中...</p>
+      <div class="header-actions">
+        <div class="nav-links">
+          <a href="/">← 首页</a>
+          <a href="https://y.qq.com/m/client/music_index/index.html?ADTAG=cbshare&channelId=10036163&mid={{ song_mid }}&type={{ song_mid }}&openinqqmusic=0" target="_blank">QQ音乐原页</a>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
+      </div>
+    </div>
+
+    <div id="loading" class="loading">正在获取热度数据...</div>
+    <div id="error-msg" class="err"></div>
+
+    <div id="content" style="display:none;">
+      <!-- 热度指数 -->
+      <div class="block">
+        <h3>热度指数</h3>
+        <div class="metrics-grid" id="metrics-grid"></div>
+      </div>
+
+      <!-- 上榜记录 -->
+      <div class="block" id="record-block" style="display:none;">
+        <h3>上榜记录</h3>
+        <ul class="record-list" id="record-list"></ul>
+      </div>
+
+      <!-- 热度曲线 -->
+      <div class="block">
+        <h3>热度曲线</h3>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;" id="chart-range-btns">
+          <button type="button" class="range-btn active" data-days="1">今日</button>
+          <button type="button" class="range-btn" data-days="30">近30天</button>
+          <button type="button" class="range-btn" data-days="180">近半年</button>
+          <button type="button" class="range-btn" data-days="365">近一年</button>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="heat-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Theme
+    (function() {
+      var saved = localStorage.getItem("qqmc_theme");
+      if (saved) document.body.setAttribute("data-theme", saved);
+    })();
+    function toggleTheme() {
+      var t = document.body.getAttribute("data-theme") === "light" ? "dark" : "light";
+      document.body.setAttribute("data-theme", t);
+      localStorage.setItem("qqmc_theme", t);
+    }
+
+    var songMid = "{{ song_mid }}";
+    if (!songMid) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("error-msg").style.display = "block";
+      document.getElementById("error-msg").textContent = "缺少歌曲 mid 参数";
+    } else {
+      fetch("/api/song-heat?song_mid=" + encodeURIComponent(songMid) + "&_=" + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          document.getElementById("loading").style.display = "none";
+          if (!data.ok) {
+            document.getElementById("error-msg").style.display = "block";
+            document.getElementById("error-msg").textContent = data.error || "获取失败";
+            return;
+          }
+          renderData(data);
+        })
+        .catch(function(e) {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("error-msg").style.display = "block";
+          document.getElementById("error-msg").textContent = "请求失败: " + e.message;
+        });
+    }
+
+    function renderData(d) {
+      // Title
+      var title = d.song_name || songMid;
+      var singer = d.singer_name || "";
+      var album = d.album_name || "";
+      document.getElementById("song-title").textContent = title;
+      document.getElementById("song-subtitle").textContent = singer + (album ? " · " + album : "");
+      document.title = title + " - 热度";
+
+      // Metrics
+      var metrics = [];
+      if (d.heat_index != null) metrics.push({label: "热度指数", value: d.heat_index.toLocaleString(), cls: ""});
+      if (d.rank != null) metrics.push({label: "今日排名", value: "#" + d.rank, cls: ""});
+      if (d.yesterday_index != null) metrics.push({label: "昨日热度", value: d.yesterday_index.toLocaleString(), cls: ""});
+      if (d.yesterday_rank != null) metrics.push({label: "昨日排名", value: "#" + d.yesterday_rank, cls: ""});
+      if (d.index_rate != null) {
+        var pct = (d.index_rate * 100).toFixed(1) + "%";
+        var cls = d.index_rate >= 0 ? "up" : "down";
+        metrics.push({label: "指数变化", value: (d.index_rate >= 0 ? "+" : "") + pct, cls: cls});
+      }
+      if (d.now_listen_users != null) metrics.push({label: "当前在听", value: d.now_listen_users.toLocaleString() + "人", cls: ""});
+
+      var grid = document.getElementById("metrics-grid");
+      grid.innerHTML = metrics.map(function(m) {
+        return '<div class="metric-item"><div class="metric-value ' + m.cls + '">' + m.value + '</div><div class="metric-label">' + m.label + '</div></div>';
+      }).join("");
+
+      // Records
+      var records = d.record || [];
+      if (records.length > 0) {
+        document.getElementById("record-block").style.display = "block";
+        var list = document.getElementById("record-list");
+        list.innerHTML = records.map(function(r) {
+          var d2 = document.createElement("div"); d2.textContent = r;
+          return "<li>" + d2.innerHTML + "</li>";
+        }).join("");
+      }
+
+      // Chart
+      if (d.chart && d.chart.date_list && d.chart.score_list) {
+        renderChart(d.chart.date_list, d.chart.score_list, 1);
+      }
+
+      document.getElementById("content").style.display = "block";
+    }
+
+    var heatChartInstance = null;
+    var currentDays = 1;
+
+    function renderChart(dates, scores, days) {
+      var labels = dates.map(function(ts) {
+        var d = new Date(ts * 1000);
+        if (days <= 1) {
+          return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+        } else {
+          return (d.getMonth()+1) + "/" + d.getDate();
+        }
+      });
+      var isDark = document.body.getAttribute("data-theme") !== "light";
+      var ctx = document.getElementById("heat-chart").getContext("2d");
+      if (heatChartInstance) {
+        heatChartInstance.destroy();
+        heatChartInstance = null;
+      }
+      heatChartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "热度指数",
+            data: scores,
+            borderColor: isDark ? "#5f8fd6" : "#3b82f6",
+            backgroundColor: isDark ? "rgba(95,143,214,0.1)" : "rgba(59,130,246,0.1)",
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: function(items) { return items[0].label; },
+                label: function(item) { return "热度: " + item.raw.toLocaleString(); }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: isDark ? "#93a4ba" : "#65708a", maxTicksLimit: 12, font: { size: 11 } },
+              grid: { color: "var(--chart-grid)" }
+            },
+            y: {
+              ticks: { color: isDark ? "#93a4ba" : "#65708a", font: { size: 11 } },
+              grid: { color: isDark ? "rgba(154,172,191,0.15)" : "rgba(148,163,184,0.2)" }
+            }
+          }
+        }
+      });
+    }
+
+    // 时间区间切换
+    document.getElementById("chart-range-btns").addEventListener("click", function(e) {
+      var btn = e.target.closest(".range-btn");
+      if (!btn || btn.classList.contains("active")) return;
+      var days = parseInt(btn.getAttribute("data-days"));
+      if (!days || !songMid) return;
+      document.querySelectorAll(".range-btn").forEach(function(b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      currentDays = days;
+      btn.textContent = "加载中...";
+      fetch("/api/song-heat?song_mid=" + encodeURIComponent(songMid) + "&last_days=" + days + "&_=" + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.textContent = btn === document.querySelector('[data-days="1"]') ? "今日" :
+            btn === document.querySelector('[data-days="30"]') ? "近30天" :
+            btn === document.querySelector('[data-days="180"]') ? "近半年" : "近一年";
+          if (data.ok && data.chart && data.chart.date_list && data.chart.score_list) {
+            renderChart(data.chart.date_list, data.chart.score_list, days);
+          }
+        })
+        .catch(function() {
+          btn.textContent = ["今日","近30天","近半年","近一年"][[1,30,180,365].indexOf(days)] || "?";
+        });
+    });
+
+  </script>
+</body>
+</html>

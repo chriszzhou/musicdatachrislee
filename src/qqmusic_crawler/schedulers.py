@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date as date_type, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -53,18 +54,24 @@ def _root() -> Path:
 
 
 def run_scheduled_toplist_check() -> None:
-    """对三平台依次执行上榜检查，结果写入各平台 toplist 库。"""
+    """对三平台并发执行上榜检查，结果写入各平台 toplist 库。"""
     root = _root()
-    for platform in SUPPORTED_PLATFORMS:
-        try:
-            check_artist_toplist(
-                platform=platform,
-                artist_name=TOPLIST_ARTIST_NAME,
-                top_n=300,
-                base_dir=root,
-            )
-        except Exception:
-            pass
+
+    def _check(platform):
+        check_artist_toplist(
+            platform=platform,
+            artist_name=TOPLIST_ARTIST_NAME,
+            top_n=300,
+            base_dir=root,
+        )
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(_check, p): p for p in SUPPORTED_PLATFORMS}
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception:
+                pass
 
 
 def _toplist_scheduler_loop() -> None:
@@ -94,13 +101,12 @@ def _new_song_scheduler_loop() -> None:
     retry_sleep_seconds = (2, 5, 10)
     while True:
         time.sleep(interval_sec)
-        for platform in SUPPORTED_PLATFORMS:
-            ok = False
+
+        def _update_platform(platform):
             for idx, sleep_sec in enumerate(retry_sleep_seconds, start=1):
                 try:
                     update_new_song_one_platform(platform, base_dir=root)
-                    ok = True
-                    break
+                    return True
                 except Exception as e:
                     is_last = idx == len(retry_sleep_seconds)
                     if is_last:
@@ -121,8 +127,16 @@ def _new_song_scheduler_loop() -> None:
                             sleep_sec,
                         )
                         time.sleep(sleep_sec)
-            if not ok:
-                continue
+            return False
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_update_platform, p): p for p in SUPPORTED_PLATFORMS}
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                except Exception:
+                    pass
+
         with NEW_SONG_LAST_UPDATE_LOCK:
             NEW_SONG_LAST_UPDATE_AT = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -133,36 +147,47 @@ def _run_crawl_track_round() -> None:
     today = date_type.today()
     if _crawl_track_last_cleanup_date != today:
         _crawl_track_last_cleanup_date = today
-        for platform in SUPPORTED_PLATFORMS:
-            try:
-                deleted = prune_old_snapshots(platform, keep_per_day=1, base_dir=root)
-                if deleted > 0:
-                    logger.info(
-                        "定时抓取-快照清理 {} 已删除 {} 个旧快照",
-                        get_platform_meta(platform)["name"],
-                        deleted,
-                    )
-            except Exception as e:
-                logger.warning("定时抓取-快照清理 {} 异常: {}", platform, e)
-    for platform in SUPPORTED_PLATFORMS:
-        try:
-            result = crawl_track(
-                platform=platform,
-                artist_name=CRAWL_TRACK_ARTIST_NAME,
-                song_limit=None,
-            )
-            if result.get("ok"):
+
+        def _cleanup(platform):
+            deleted = prune_old_snapshots(platform, keep_per_day=1, base_dir=root)
+            if deleted > 0:
                 logger.info(
-                    "定时抓取 {} 完成: 保存 {} 首, 歌曲指标变化 {}, 歌手指标变化 {}",
+                    "定时抓取-快照清理 {} 已删除 {} 个旧快照",
                     get_platform_meta(platform)["name"],
-                    result.get("total_saved", 0),
-                    result.get("metric_changes", 0),
-                    result.get("artist_metric_changes", 0),
+                    deleted,
                 )
-            else:
-                logger.warning("定时抓取 {} 失败: {}", platform, result.get("error", "未知错误"))
-        except Exception as e:
-            logger.warning("定时抓取 {} 异常: {}", platform, e, exc_info=True)
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_cleanup, p): p for p in SUPPORTED_PLATFORMS}
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.warning("定时抓取-快照清理异常: {}", e)
+    def _crawl_one(platform):
+        result = crawl_track(
+            platform=platform,
+            artist_name=CRAWL_TRACK_ARTIST_NAME,
+            song_limit=None,
+        )
+        if result.get("ok"):
+            logger.info(
+                "定时抓取 {} 完成: 保存 {} 首, 歌曲指标变化 {}, 歌手指标变化 {}",
+                get_platform_meta(platform)["name"],
+                result.get("total_saved", 0),
+                result.get("metric_changes", 0),
+                result.get("artist_metric_changes", 0),
+            )
+        else:
+            logger.warning("定时抓取 {} 失败: {}", platform, result.get("error", "未知错误"))
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(_crawl_one, p): p for p in SUPPORTED_PLATFORMS}
+        for f in as_completed(futures):
+            try:
+                f.result()
+            except Exception as e:
+                logger.warning("定时抓取异常: {}", e, exc_info=True)
 
     # 三平台本轮 crawl_track 结束后：自动对酷狗变化库做多轮异常修正，直到本轮无修正
     try:

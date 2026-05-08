@@ -28,6 +28,7 @@ from .constants import (
     NEW_SONG_ARTIST,
     NEW_SONG_CHART_NUM_POINTS,
     NEW_SONG_CHART_START_DATE,
+    NEW_SONG_MIDS,
     NEW_SONG_NAME,
 )
 from .paths import (
@@ -86,32 +87,75 @@ def _read_song_from_snapshot(
     db_path: Path,
     artist_mid: str,
     song_name: str,
+    song_mid: str = "",
 ) -> Optional[Dict[str, Any]]:
-    """从快照库中按歌手+歌名读一条歌曲（含 song_mid, song_id, mixsongid 等供只更新一首时用）。"""
+    """从快照库中读一条歌曲。优先按 song_mid 精确匹配，否则按歌名匹配。"""
     if not db_path.is_file():
         return None
     conn = connect_sqlite(db_path)
     try:
-        try:
-            row = conn.execute(
-                """
-                SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0), mixsongid
-                FROM songs WHERE artist_mid = ? AND (name = ? OR name LIKE ?)
-                LIMIT 1
-                """,
-                (artist_mid, song_name.strip(), "%" + song_name.strip() + "%"),
-            ).fetchone()
-            mixsongid = int(row[4]) if row and len(row) > 4 and row[4] is not None else None
-        except sqlite3.OperationalError:
-            row = conn.execute(
-                """
-                SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0)
-                FROM songs WHERE artist_mid = ? AND (name = ? OR name LIKE ?)
-                LIMIT 1
-                """,
-                (artist_mid, song_name.strip(), "%" + song_name.strip() + "%"),
-            ).fetchone()
-            mixsongid = None
+        row = None
+        mixsongid = None
+        # 优先按 song_mid 精确匹配
+        if song_mid:
+            try:
+                row = conn.execute(
+                    "SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0), mixsongid "
+                    "FROM songs WHERE song_mid = ? LIMIT 1",
+                    (song_mid,),
+                ).fetchone()
+                mixsongid = int(row[4]) if row and len(row) > 4 and row[4] is not None else None
+            except sqlite3.OperationalError:
+                row = conn.execute(
+                    "SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0) "
+                    "FROM songs WHERE song_mid = ? LIMIT 1",
+                    (song_mid,),
+                ).fetchone()
+                mixsongid = None
+        # 回退到歌名匹配
+        if not row:
+            try:
+                row = conn.execute(
+                    """
+                    SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0), mixsongid
+                    FROM songs WHERE artist_mid = ? AND name = ?
+                    LIMIT 1
+                    """,
+                    (artist_mid, song_name.strip()),
+                ).fetchone()
+                mixsongid = int(row[4]) if row and len(row) > 4 and row[4] is not None else None
+            except sqlite3.OperationalError:
+                row = conn.execute(
+                    """
+                    SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0)
+                    FROM songs WHERE artist_mid = ? AND name = ?
+                    LIMIT 1
+                    """,
+                    (artist_mid, song_name.strip()),
+                ).fetchone()
+                mixsongid = None
+        # 最后尝试模糊匹配
+        if not row:
+            try:
+                row = conn.execute(
+                    """
+                    SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0), mixsongid
+                    FROM songs WHERE artist_mid = ? AND name LIKE ?
+                    LIMIT 1
+                    """,
+                    (artist_mid, "%" + song_name.strip() + "%"),
+                ).fetchone()
+                mixsongid = int(row[4]) if row and len(row) > 4 and row[4] is not None else None
+            except sqlite3.OperationalError:
+                row = conn.execute(
+                    """
+                    SELECT song_mid, song_id, name, COALESCE(favorite_count_text, 0)
+                    FROM songs WHERE artist_mid = ? AND name LIKE ?
+                    LIMIT 1
+                    """,
+                    (artist_mid, "%" + song_name.strip() + "%"),
+                ).fetchone()
+                mixsongid = None
         if not row:
             return None
         return {
@@ -174,11 +218,11 @@ def update_new_song_one_platform(
     if not latest:
         return {"ok": False, "platform": platform, "error": "暂无该歌手快照，请先执行抓取"}
 
-    old_row = _read_song_from_snapshot(latest, artist_mid, NEW_SONG_NAME)
+    old_row = _read_song_from_snapshot(latest, artist_mid, NEW_SONG_NAME, song_mid=NEW_SONG_MIDS.get(platform, ""))
     if not old_row:
         previous = _get_previous_snapshot_path(platform, artist_mid, base_dir, after_this=latest)
         if previous:
-            old_row = _read_song_from_snapshot(previous, artist_mid, NEW_SONG_NAME)
+            old_row = _read_song_from_snapshot(previous, artist_mid, NEW_SONG_NAME, song_mid=NEW_SONG_MIDS.get(platform, ""))
     if not old_row:
         return {"ok": False, "platform": platform, "error": "快照中无该歌曲，请先执行抓取"}
 
@@ -242,7 +286,7 @@ def get_new_song_current_metrics(base_dir: Optional[Path] = None) -> Dict[str, A
         if not latest:
             out["platforms"][platform] = {"ok": False, "error": "暂无快照", "favorite_count": None}
             continue
-        row = _read_song_from_snapshot(latest, artist_mid, NEW_SONG_NAME)
+        row = _read_song_from_snapshot(latest, artist_mid, NEW_SONG_NAME, song_mid=NEW_SONG_MIDS.get(platform, ""))
         if not row:
             out["platforms"][platform] = {"ok": False, "error": "快照中无该歌曲", "favorite_count": None}
             continue
