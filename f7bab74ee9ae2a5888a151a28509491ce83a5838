@@ -1,0 +1,63 @@
+src/qqmusic_crawler/heat_api.py
+  edc8b509ebbf57c0 1-143
+src/qqmusic_crawler/web_main.py
+  edc8b509ebbf57c0 16-17,40-42,222,498-556,558-560,562,565,579,587-610,612-615,618,774-778,780
+.cursor/rules/python-3-9.mdc
+  741ed2f62afb8d8a 1-20
+templates/index.html
+  edc8b509ebbf57c0 760,836-861,1162,1164,1169,1592,1596,1680,1684-1695,1726-1731,1864-1952,2136-2140
+.python-version
+  741ed2f62afb8d8a 1
+templates/song_heat.html
+  edc8b509ebbf57c0 1-157,164-202,210-292,294-298,303-304,310-312,318-357,383-386
+templates/song_heat_kugou.html
+  edc8b509ebbf57c0 1-133,151-153,156-211
+src/qqmusic_crawler/heat_scraper.py
+  edc8b509ebbf57c0 6-10,13-16,18,21,23-30,40-41,56,58,62-71,73-84,86,88-89,110,115,118,172,176,180,187-188,191-193,195-202,205-207,210-241,249-271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.13",
+  "base_commit_sha": "f7bab74ee9ae2a5888a151a28509491ce83a5838",
+  "prompts": {
+    "4d5b2a394aa8b6a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89d6b106-a9b9-4e6b-90ff-3bb47b4321fc",
+        "model": "claude-sonnet-4.6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 48,
+      "total_deletions": 5,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    },
+    "741ed2f62afb8d8a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ec3f0ea0-e2cd-48a4-8bfe-da6563dd0c5e",
+        "model": "default"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 895,
+      "total_deletions": 73,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    },
+    "edc8b509ebbf57c0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e48223f-442f-4772-897c-c4afef2fe284",
+        "model": "claude-opus-4.6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 1661,
+      "total_deletions": 498,
+      "accepted_lines": 1071,
+      "overriden_lines": 56
+    }
+  }
+}
