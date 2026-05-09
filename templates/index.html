@@ -669,7 +669,7 @@
   <div class="header-card">
     <h1 class="title">ChrisLee音乐地图</h1>
     <div class="header-actions">
-      <span class="nav-links"><a href="/new-song">新歌「{{ new_song_name }}」</a></span>
+      <span class="nav-links"><a href="/changereport">变化报告</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换主题">切换为浅色</button>
     </div>
   </div>
@@ -701,10 +701,12 @@
       <div class="home-kpi-card home-kpi-card--fans">
         <div class="home-kpi-label">总粉丝数</div>
         <div class="home-kpi-value" id="home-kpi-fans">-</div>
+        <div id="home-kpi-fans-delta"></div>
       </div>
       <div class="home-kpi-card home-kpi-card--favorite">
         <div class="home-kpi-label">总收藏数</div>
         <div class="home-kpi-value" id="home-kpi-favorite">-</div>
+        <div id="home-kpi-favorite-delta"></div>
       </div>
     </div>
     <div class="home-pie-grid">
@@ -1027,10 +1029,30 @@
         var colors = getTheme() === "dark"
           ? ["#5ba276", "#bc7075", "#5a98bf"]
           : ["#22b35c", "#e85a5a", "#1ab0ff"];
+        var prevFans = order.map(function (p) {
+          var row = by[p];
+          return row && row.prev_fans != null ? Number(row.prev_fans) : 0;
+        });
+        var prevFavs = order.map(function (p) {
+          var row = by[p];
+          return row && row.prev_favorite_sum != null ? Number(row.prev_favorite_sum) : 0;
+        });
         var kpiFans = document.getElementById("home-kpi-fans");
         var kpiFav = document.getElementById("home-kpi-favorite");
         if (kpiFans) kpiFans.textContent = numberFmt(sumArr(fans));
         if (kpiFav) kpiFav.textContent = numberFmt(sumArr(favs));
+        // 环比变化
+        var fansDelta = sumArr(fans) - sumArr(prevFans);
+        var favDelta = sumArr(favs) - sumArr(prevFavs);
+        function deltaHtml(d) {
+          if (!d) return "";
+          var color = d > 0 ? "var(--green, #34d399)" : "var(--red, #f87171)";
+          return "<div style=\"font-size:12px;color:" + color + ";margin-top:2px;\">" + (d > 0 ? "+" : "") + numberFmt(d) + "</div>";
+        }
+        var kpiFansDelta = document.getElementById("home-kpi-fans-delta");
+        var kpiFavDelta = document.getElementById("home-kpi-favorite-delta");
+        if (kpiFansDelta) kpiFansDelta.innerHTML = sumArr(prevFans) > 0 ? deltaHtml(fansDelta) : "";
+        if (kpiFavDelta) kpiFavDelta.innerHTML = sumArr(prevFavs) > 0 ? deltaHtml(favDelta) : "";
 
         function buildSeriesData(values) {
           return values.map(function (v, idx) {
@@ -1407,8 +1429,17 @@
             var html = "";
             order.forEach(function (p) {
               var res = resultsByPlatform[p.key];
+              // 取该平台最新 last_seen_at 作为更新时间
+              var latestTime = "";
+              if (res && res.rows && res.rows.length) {
+                res.rows.forEach(function(r) {
+                  var t = String(r.last_seen_at || "");
+                  if (t > latestTime) latestTime = t;
+                });
+              }
+              var timeLabel = latestTime ? " · 更新于 " + latestTime.slice(11, 16) : "";
               html += "<div class=\"milestone-card " + p.cls + "\">";
-              html += "<div class=\"milestone-card-head\">" + esc(p.title) + "</div>";
+              html += "<div class=\"milestone-card-head\">" + esc(p.title) + "<span style=\"font-weight:400;font-size:12px;opacity:0.8;\">" + esc(timeLabel) + "</span></div>";
               html += "<div class=\"milestone-card-body\">";
               if (!res) {
                 html += "<div class=\"milestone-card-empty\">暂无记录</div>";
@@ -1440,11 +1471,10 @@
           });
       }
 
-      function formatMilestoneFavoriteWan(count) {
+      function formatMilestoneFavorite(count) {
         var n = parseInt(count, 10);
         if (isNaN(n) || n < 0) return "-";
-        if (n < 10000) return "&lt;1W+";
-        return Math.floor(n / 10000) + "W+";
+        return n.toLocaleString("zh-CN");
       }
 
       function milestoneEsc(s) {
@@ -1561,8 +1591,8 @@
                   g.entries.forEach(function (e) {
                     var fav = e.favorite_count;
                     var favNum = parseInt(fav, 10);
-                    var favDisplay = formatMilestoneFavoriteWan(fav);
-                    var titleExact = !isNaN(favNum) ? "精确收藏量 " + favNum.toLocaleString("zh-CN") : "";
+                    var favDisplay = formatMilestoneFavorite(fav);
+                    var titleExact = !isNaN(favNum) && favNum >= 10000 ? Math.floor(favNum / 10000) + "W+" : "";
                     var nameAttr = milestoneAttr(e.song_name != null ? e.song_name : "");
                     html += "<tr><td>" + milestoneEsc(e.time || "") + "</td><td title=\"" + milestoneEsc(titleExact) + "\">" + favDisplay + "</td><td><button type=\"button\" class=\"milestone-delete-btn\" data-platform=\"" + milestoneEsc(e.platform || p.key) + "\" data-time=\"" + milestoneEsc(e.time || "") + "\" data-song-name=\"" + nameAttr + "\" data-favorite-count=\"" + (fav != null ? fav : "") + "\">删除</button></td></tr>";
                   });
@@ -1861,282 +1891,109 @@
         loadToplistHistory(false);
         pollCrawlTrackStatus();
       }, 20 * 1000);
-      // ============ 歌手歌曲数据 ============
-      var artistSongsMid = "";
-      var artistSongsOffset = 0;
+      // ============ 歌手歌曲数据（通用） ============
+      function initArtistSongsSection(cfg) {
+        var mid = "";
+        var offset = 0;
+        var inputEl = document.getElementById(cfg.prefix + "-search-input");
+        var btnEl = document.getElementById(cfg.prefix + "-search-btn");
+        var statusEl = document.getElementById(cfg.prefix + "-search-status");
+        var errEl = document.getElementById(cfg.prefix + "-songs-err");
+        var tableEl = document.getElementById(cfg.prefix + "-songs-table");
+        var tbodyEl = document.getElementById(cfg.prefix + "-songs-tbody");
+        var moreBtn = document.getElementById(cfg.prefix + "-songs-more-btn");
 
-      document.getElementById("artist-search-btn").addEventListener("click", function() {
-        var name = document.getElementById("artist-search-input").value.trim();
-        if (!name) return;
-        var status = document.getElementById("artist-search-status");
-        status.textContent = "搜索中...";
-        document.getElementById("artist-songs-err").style.display = "none";
-        document.getElementById("artist-songs-table").style.display = "none";
-        document.getElementById("artist-songs-more-btn").style.display = "none";
-        document.getElementById("artist-songs-tbody").innerHTML = "";
-        artistSongsOffset = 0;
+        btnEl.addEventListener("click", function() {
+          var name = inputEl.value.trim();
+          if (!name) return;
+          statusEl.textContent = "搜索中...";
+          errEl.style.display = "none";
+          tableEl.style.display = "none";
+          moreBtn.style.display = "none";
+          tbodyEl.innerHTML = "";
+          offset = 0;
+          fetch(cfg.searchApi + "?name=" + encodeURIComponent(name) + "&_=" + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.ok) { statusEl.textContent = ""; errEl.textContent = data.error || "搜索失败"; errEl.style.display = "block"; return; }
+              mid = data[cfg.midField];
+              statusEl.textContent = "歌手: " + data[cfg.nameField];
+              loadMore();
+            })
+            .catch(function(e) { statusEl.textContent = ""; errEl.textContent = "请求失败: " + e.message; errEl.style.display = "block"; });
+        });
+        inputEl.addEventListener("keydown", function(e) { if (e.key === "Enter") btnEl.click(); });
+        moreBtn.addEventListener("click", function() { loadMore(); });
 
-        fetch("/api/search-artist?name=" + encodeURIComponent(name) + "&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (!data.ok) {
-              status.textContent = "";
-              var err = document.getElementById("artist-songs-err");
-              err.textContent = data.error || "搜索失败";
-              err.style.display = "block";
-              return;
-            }
-            artistSongsMid = data.artist_mid;
-            status.textContent = "歌手: " + data.artist_name;
-            loadArtistSongs();
-          })
-          .catch(function(e) {
-            status.textContent = "";
-            var err = document.getElementById("artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
-      });
-
-      document.getElementById("artist-search-input").addEventListener("keydown", function(e) {
-        if (e.key === "Enter") document.getElementById("artist-search-btn").click();
-      });
-
-      document.getElementById("artist-songs-more-btn").addEventListener("click", function() {
-        loadArtistSongs();
-      });
-
-      function loadArtistSongs() {
-        if (!artistSongsMid) return;
-        var moreBtn = document.getElementById("artist-songs-more-btn");
-        moreBtn.textContent = "加载中...";
-        moreBtn.disabled = true;
-
-        fetch("/api/artist-songs-heat?artist_mid=" + encodeURIComponent(artistSongsMid) +
-          "&offset=" + artistSongsOffset + "&limit=10&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            moreBtn.disabled = false;
-            if (!data.ok) {
-              var err = document.getElementById("artist-songs-err");
-              err.textContent = data.error || "获取失败";
-              err.style.display = "block";
-              moreBtn.style.display = "none";
-              return;
-            }
-            var tbody = document.getElementById("artist-songs-tbody");
-            data.songs.forEach(function(s) {
-              var tr = document.createElement("tr");
-              var nameHtml = s.song_mid
-                ? "<a href=\"/song-heat?mid=" + encodeURIComponent(s.song_mid) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
-                : escapeHtml(s.song_name);
-              tr.innerHTML = "<td>" + s.index + "</td>"
-                + "<td>" + nameHtml + "</td>"
-                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
-                + "<td>" + (s.heat_index != null ? numberFmt(s.heat_index) : "-") + "</td>"
-                + "<td>" + (s.now_listen_users != null ? numberFmt(s.now_listen_users) : "-") + "</td>";
-              tbody.appendChild(tr);
-            });
-            document.getElementById("artist-songs-table").style.display = "";
-            artistSongsOffset += data.songs.length;
-            if (data.has_more && data.songs.length > 0) {
-              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
-              moreBtn.style.display = "";
-            } else {
-              moreBtn.style.display = "none";
-            }
-          })
-          .catch(function(e) {
-            moreBtn.disabled = false;
-            moreBtn.textContent = "▼ 加载更多";
-            var err = document.getElementById("artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
+        function loadMore() {
+          if (!mid) return;
+          moreBtn.textContent = "加载中...";
+          moreBtn.disabled = true;
+          var url = cfg.songsApi + "?" + cfg.midParam + "=" + encodeURIComponent(mid) + "&offset=" + offset + "&limit=10&_=" + Date.now();
+          fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              moreBtn.disabled = false;
+              if (!data.ok) { errEl.textContent = data.error || "获取失败"; errEl.style.display = "block"; moreBtn.style.display = "none"; return; }
+              data.songs.forEach(function(s) {
+                var tr = document.createElement("tr");
+                tr.innerHTML = cfg.renderRow(s);
+                tbodyEl.appendChild(tr);
+              });
+              tableEl.style.display = "";
+              offset += data.songs.length;
+              if (data.has_more && data.songs.length > 0) { moreBtn.textContent = "▼ 加载更多（每次 10 条）"; moreBtn.style.display = ""; }
+              else { moreBtn.style.display = "none"; }
+            })
+            .catch(function(e) { moreBtn.disabled = false; moreBtn.textContent = "▼ 加载更多"; errEl.textContent = "请求失败: " + e.message; errEl.style.display = "block"; });
+        }
       }
 
-      // ============ 酷狗歌手歌曲数据 ============
-      var kgSingerId = "";
-      var kgOffset = 0;
-
-      document.getElementById("kg-artist-search-btn").addEventListener("click", function() {
-        var name = document.getElementById("kg-artist-search-input").value.trim();
-        if (!name) return;
-        var status = document.getElementById("kg-artist-search-status");
-        status.textContent = "搜索中...";
-        document.getElementById("kg-artist-songs-err").style.display = "none";
-        document.getElementById("kg-artist-songs-table").style.display = "none";
-        document.getElementById("kg-artist-songs-more-btn").style.display = "none";
-        document.getElementById("kg-artist-songs-tbody").innerHTML = "";
-        kgOffset = 0;
-
-        fetch("/api/search-artist-kugou?name=" + encodeURIComponent(name) + "&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (!data.ok) {
-              status.textContent = "";
-              var err = document.getElementById("kg-artist-songs-err");
-              err.textContent = data.error || "搜索失败";
-              err.style.display = "block";
-              return;
-            }
-            kgSingerId = data.singerid;
-            status.textContent = "歌手: " + data.singername;
-            loadKgArtistSongs();
-          })
-          .catch(function(e) {
-            status.textContent = "";
-            var err = document.getElementById("kg-artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
+      // QQ音乐
+      initArtistSongsSection({
+        prefix: "artist",
+        searchApi: "/api/search-artist",
+        songsApi: "/api/artist-songs-heat",
+        midField: "artist_mid", nameField: "artist_name", midParam: "artist_mid",
+        renderRow: function(s) {
+          var nameHtml = s.song_mid
+            ? "<a href=\"/song-heat?mid=" + encodeURIComponent(s.song_mid) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
+            : escapeHtml(s.song_name);
+          return "<td>" + s.index + "</td><td>" + nameHtml + "</td>"
+            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
+            + "<td>" + (s.heat_index != null ? numberFmt(s.heat_index) : "-") + "</td>"
+            + "<td>" + (s.now_listen_users != null ? numberFmt(s.now_listen_users) : "-") + "</td>";
+        }
       });
 
-      document.getElementById("kg-artist-search-input").addEventListener("keydown", function(e) {
-        if (e.key === "Enter") document.getElementById("kg-artist-search-btn").click();
+      // 酷狗音乐
+      initArtistSongsSection({
+        prefix: "kg-artist",
+        searchApi: "/api/search-artist-kugou",
+        songsApi: "/api/artist-songs-heat-kugou",
+        midField: "singerid", nameField: "singername", midParam: "singerid",
+        renderRow: function(s) {
+          var nameHtml = s.mixsongid
+            ? "<a href=\"/song-heat-kugou?mixsongid=" + encodeURIComponent(String(s.mixsongid)) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
+            : escapeHtml(s.song_name);
+          return "<td>" + s.index + "</td><td>" + nameHtml + "</td>"
+            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
+            + "<td>" + (s.exponent != null ? numberFmt(Math.round(s.exponent)) : "-") + "</td>"
+            + "<td>" + (s.listener_num != null ? numberFmt(s.listener_num) : "-") + "</td>";
+        }
       });
 
-      document.getElementById("kg-artist-songs-more-btn").addEventListener("click", function() {
-        loadKgArtistSongs();
+      // 网易云音乐
+      initArtistSongsSection({
+        prefix: "ne-artist",
+        searchApi: "/api/search-artist-netease",
+        songsApi: "/api/artist-songs-heat-netease",
+        midField: "artist_id", nameField: "artist_name", midParam: "artist_id",
+        renderRow: function(s) {
+          return "<td>" + s.index + "</td><td>" + escapeHtml(s.song_name) + "</td>"
+            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>";
+        }
       });
-
-      function loadKgArtistSongs() {
-        if (!kgSingerId) return;
-        var moreBtn = document.getElementById("kg-artist-songs-more-btn");
-        moreBtn.textContent = "加载中...";
-        moreBtn.disabled = true;
-
-        fetch("/api/artist-songs-heat-kugou?singerid=" + encodeURIComponent(kgSingerId) +
-          "&offset=" + kgOffset + "&limit=10&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            moreBtn.disabled = false;
-            if (!data.ok) {
-              var err = document.getElementById("kg-artist-songs-err");
-              err.textContent = data.error || "获取失败";
-              err.style.display = "block";
-              moreBtn.style.display = "none";
-              return;
-            }
-            var tbody = document.getElementById("kg-artist-songs-tbody");
-            data.songs.forEach(function(s) {
-              var tr = document.createElement("tr");
-              var nameHtml = s.mixsongid
-                ? "<a href=\"/song-heat-kugou?mixsongid=" + encodeURIComponent(String(s.mixsongid)) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
-                : escapeHtml(s.song_name);
-              tr.innerHTML = "<td>" + s.index + "</td>"
-                + "<td>" + nameHtml + "</td>"
-                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
-                + "<td>" + (s.exponent != null ? numberFmt(Math.round(s.exponent)) : "-") + "</td>"
-                + "<td>" + (s.listener_num != null ? numberFmt(s.listener_num) : "-") + "</td>";
-              tbody.appendChild(tr);
-            });
-            document.getElementById("kg-artist-songs-table").style.display = "";
-            kgOffset += data.songs.length;
-            if (data.has_more && data.songs.length > 0) {
-              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
-              moreBtn.style.display = "";
-            } else {
-              moreBtn.style.display = "none";
-            }
-          })
-          .catch(function(e) {
-            moreBtn.disabled = false;
-            moreBtn.textContent = "▼ 加载更多";
-            var err = document.getElementById("kg-artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
-      }
-
-      // ============ 网易云歌手歌曲数据 ============
-      var neArtistId = "";
-      var neOffset = 0;
-
-      document.getElementById("ne-artist-search-btn").addEventListener("click", function() {
-        var name = document.getElementById("ne-artist-search-input").value.trim();
-        if (!name) return;
-        var status = document.getElementById("ne-artist-search-status");
-        status.textContent = "搜索中...";
-        document.getElementById("ne-artist-songs-err").style.display = "none";
-        document.getElementById("ne-artist-songs-table").style.display = "none";
-        document.getElementById("ne-artist-songs-more-btn").style.display = "none";
-        document.getElementById("ne-artist-songs-tbody").innerHTML = "";
-        neOffset = 0;
-
-        fetch("/api/search-artist-netease?name=" + encodeURIComponent(name) + "&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (!data.ok) {
-              status.textContent = "";
-              var err = document.getElementById("ne-artist-songs-err");
-              err.textContent = data.error || "搜索失败";
-              err.style.display = "block";
-              return;
-            }
-            neArtistId = data.artist_id;
-            status.textContent = "歌手: " + data.artist_name;
-            loadNeArtistSongs();
-          })
-          .catch(function(e) {
-            status.textContent = "";
-            var err = document.getElementById("ne-artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
-      });
-
-      document.getElementById("ne-artist-search-input").addEventListener("keydown", function(e) {
-        if (e.key === "Enter") document.getElementById("ne-artist-search-btn").click();
-      });
-
-      document.getElementById("ne-artist-songs-more-btn").addEventListener("click", function() {
-        loadNeArtistSongs();
-      });
-
-      function loadNeArtistSongs() {
-        if (!neArtistId) return;
-        var moreBtn = document.getElementById("ne-artist-songs-more-btn");
-        moreBtn.textContent = "加载中...";
-        moreBtn.disabled = true;
-
-        fetch("/api/artist-songs-heat-netease?artist_id=" + encodeURIComponent(neArtistId) +
-          "&offset=" + neOffset + "&limit=10&_=" + Date.now())
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            moreBtn.disabled = false;
-            if (!data.ok) {
-              var err = document.getElementById("ne-artist-songs-err");
-              err.textContent = data.error || "获取失败";
-              err.style.display = "block";
-              moreBtn.style.display = "none";
-              return;
-            }
-            var tbody = document.getElementById("ne-artist-songs-tbody");
-            data.songs.forEach(function(s) {
-              var tr = document.createElement("tr");
-              tr.innerHTML = "<td>" + s.index + "</td>"
-                + "<td>" + escapeHtml(s.song_name) + "</td>"
-                + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>";
-              tbody.appendChild(tr);
-            });
-            document.getElementById("ne-artist-songs-table").style.display = "";
-            neOffset += data.songs.length;
-            if (data.has_more && data.songs.length > 0) {
-              moreBtn.textContent = "▼ 加载更多（每次 10 条）";
-              moreBtn.style.display = "";
-            } else {
-              moreBtn.style.display = "none";
-            }
-          })
-          .catch(function(e) {
-            moreBtn.disabled = false;
-            moreBtn.textContent = "▼ 加载更多";
-            var err = document.getElementById("ne-artist-songs-err");
-            err.textContent = "请求失败: " + e.message;
-            err.style.display = "block";
-          });
-      }
 
     })();
   </script>

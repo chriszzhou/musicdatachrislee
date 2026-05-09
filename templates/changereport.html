@@ -167,6 +167,20 @@
     body[data-theme="dark"] input::placeholder {
       color: #8fa2bc;
     }
+    input[type="date"], input[type="month"] {
+      min-width: 150px;
+      cursor: pointer;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="month"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.7;
+      filter: invert(0);
+    }
+    body[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+    body[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+    }
     button {
       border: 0;
       color: #fff;
@@ -572,8 +586,6 @@
     <h1 class="title">变化报告</h1>
     <div class="header-actions">
       <span class="nav-links" style="margin-right: 12px;"><a href="/">首页</a> · <a href="/new-song">新歌「{{ new_song_name }}」</a></span>
-      <button type="button" id="crawl-now-btn" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--primary);color:#fff;cursor:pointer;">立即抓取快照</button>
-      <span id="crawl-now-status" style="color:var(--muted);font-size:13px;"></span>
     </div>
   </div>
 
@@ -598,27 +610,24 @@
         <option value="day" {% if report_mode == 'day' %}selected{% endif %}>日</option>
       </select>
       <input type="hidden" id="report-value-hidden" name="report_value" value="{{ report_value }}" />
-      <input
-        id="report-value-day"
-        type="date"
-        placeholder="请选择日期"
-        value="{% if report_mode == 'day' %}{{ report_value }}{% endif %}"
-        aria-label="报告日期（按日）"
-      />
-      <input
-        id="report-value-month"
-        type="month"
-        placeholder="请选择月份"
-        value="{% if report_mode == 'month' %}{{ report_value }}{% endif %}"
-        style="display:none;"
-        aria-label="报告月份"
-      />
+      <button type="button" id="report-prev-btn" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card-soft);color:var(--text);font-size:14px;cursor:pointer;" title="上一天/月/年">&lt;</button>
+      <input id="report-value-day" type="date" value="{% if report_mode == 'day' %}{{ report_value }}{% endif %}" aria-label="报告日期（按日）" />
+      <input id="report-value-month" type="month" value="{% if report_mode == 'month' %}{{ report_value }}{% endif %}" style="display:none;" aria-label="报告月份" />
       <select id="report-value-year" style="display:none;" aria-label="报告年份" data-initial-year="{{ report_value if report_mode == 'year' else '' }}"></select>
+      <button type="button" id="report-next-btn" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card-soft);color:var(--text);font-size:14px;cursor:pointer;" title="下一天/月/年">&gt;</button>
       <button type="submit">生成报告</button>
     </form>
     <div class="progress-wrap js-progress-wrap">
       <div class="progress-text js-progress-text">处理中... 0% (0秒)</div>
       <div class="progress-bar"><div class="progress-fill js-progress-fill"></div></div>
+    </div>
+
+    <div class="chart-card" style="padding: 14px; margin-top: 20px; margin-bottom: 14px;" id="fans-merged-chart-wrap">
+      <div class="chart-title">粉丝趋势（三平台）</div>
+      <div id="fans-merged-no-data" class="subtitle" style="display:none; padding: 20px 0;">该时段内无粉丝变化数据。</div>
+      <div style="position:relative;height:260px;">
+        <canvas id="fans-merged-canvas"></canvas>
+      </div>
     </div>
 
     <div class="report-platform-grid">
@@ -644,7 +653,7 @@
       </div>
       {% endfor %}
       {% else %}
-      <div>无</div>
+      <div style="color:var(--muted);font-size:13px;padding:12px 0;">该时段内无收藏变化数据。</div>
       {% endif %}
       </div>
       </div>
@@ -665,47 +674,33 @@
       </div>
       {% endfor %}
       {% else %}
-      <div>无</div>
+      <div style="color:var(--muted);font-size:13px;padding:12px 0;">该时段内无收藏变化数据。</div>
       {% endif %}
       </div>
 
-      <div class="row" style="margin-top: 12px;">
-        <button type="button" class="js-btn-report-chart"
-          data-platform="{{ plat }}"
-          data-report-mode="{{ report_mode }}"
-          data-report-value="{{ report_value }}"
-          data-report-artist-mid="{{ report_artist_mids.get(plat, '') }}"
-          onclick="typeof window.showReportChart === 'function' && window.showReportChart(this);"
-        >变化折线图</button>
-      </div>
         {% else %}
       <div class="err">{{ result.get("error", "加载失败") }}</div>
         {% endif %}
       </div>
     {% endfor %}
+    </div>
 
-    {% for plat in platforms %}
-      {% set result = reports_by_platform.get(plat, {}) %}
-      {% if result.get("ok") %}
-      <div id="report-chart-wrap-{{ plat }}" class="report-chart-wrap-row" style="display:none; margin-top: 14px;">
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">变化趋势（收藏 / 粉丝 增量）</div>
-          <div id="report-chart-no-data-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">该范围内无变化数据。</div>
-          <canvas id="report-chart-canvas-{{ plat }}"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">收藏折线图（歌曲，Top10）</div>
-          <div id="report-chart-no-data-favorite-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-favorite-{{ plat }}"></canvas>
-        </div>
-        <div class="chart-card" style="padding: 14px; margin-bottom: 14px;">
-          <div class="chart-title">粉丝折线图</div>
-          <div id="report-chart-no-data-fans-{{ plat }}" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
-          <canvas id="report-chart-canvas-fans-{{ plat }}"></canvas>
-        </div>
+    <div class="chart-card" style="padding: 14px; margin-top: 20px; margin-bottom: 14px;" id="fav-chart-wrap">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <div class="chart-title" style="margin:0;">收藏折线图（歌曲，Top10）</div>
+        <select id="fav-chart-platform-select" style="padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card-soft);color:var(--text);font-size:13px;">
+          {% for plat in platforms %}
+          <option value="{{ plat }}"
+            data-report-mode="{{ report_mode }}" data-report-value="{{ report_value }}"
+            data-report-artist-mid="{{ report_artist_mids.get(plat, '') }}"
+            {% if plat == 'netease' %}selected{% endif %}>{{ platform_display_names.get(plat, plat) }}</option>
+          {% endfor %}
+        </select>
       </div>
-      {% endif %}
-    {% endfor %}
+      <div id="fav-chart-no-data" class="subtitle" style="display:none; padding: 20px 0;">无数据</div>
+      <div style="position:relative;height:280px;">
+        <canvas id="fav-chart-canvas"></canvas>
+      </div>
     </div>
     </div>
   </div>
@@ -866,9 +861,7 @@
           return;
         }
         var wrap = document.getElementById("report-chart-wrap-" + suf);
-        var canvas = document.getElementById("report-chart-canvas-" + suf);
-        if (!wrap || !canvas) {
-          alert("页面元素未就绪，请刷新后重试。");
+        if (!wrap) {
           return;
         }
         document.querySelectorAll("[id^='report-chart-wrap-']").forEach(function (el) {
@@ -878,10 +871,8 @@
         });
         wrap.style.display = "block";
         destroyReportCharts();
-        var noDataEl = document.getElementById("report-chart-no-data-" + suf);
         var noDataFav = document.getElementById("report-chart-no-data-favorite-" + suf);
-        var noDataFans = document.getElementById("report-chart-no-data-fans-" + suf);
-        [noDataEl, noDataFav, noDataFans].forEach(function (el) {
+        [noDataFav].forEach(function (el) {
           if (el) el.style.display = "none";
         });
         var url = "/api/report-chart?platform=" + encodeURIComponent(platform) +
@@ -929,7 +920,6 @@
               canvasEl.height = h;
               canvasEl.style.height = h + "px";
             }
-            applyAdaptiveCanvasHeight(canvas, displayLabels.length, true);
             var chartOpts = {
               responsive: true,
               maintainAspectRatio: false,
@@ -1002,22 +992,8 @@
             }
 
             if (labels.length === 0) {
-              if (noDataEl) noDataEl.style.display = "block";
               return;
             }
-
-            var series = data.series || {};
-            reportChartInstances.push(new Chart(canvas, {
-              type: "line",
-              data: {
-                labels: displayLabels,
-                datasets: [
-                  Object.assign({ label: "收藏增量", data: series.favorite || [], borderColor: borderColorFn("#60a5fa"), backgroundColor: chartGradient(96, 165, 250) }, lineStyle),
-                  Object.assign({ label: "粉丝增量", data: series.fans || [], borderColor: borderColorFn("#a78bfa"), backgroundColor: chartGradient(167, 139, 250) }, lineStyle)
-                ]
-              },
-              options: chartOpts
-            }));
 
             function drawSubChart(canvasId, noDataId, payload, title) {
               var c = document.getElementById(canvasId);
@@ -1047,7 +1023,6 @@
             }
 
             drawSubChart("report-chart-canvas-favorite-" + suf, "report-chart-no-data-favorite-" + suf, data.song_favorite || {}, "收藏");
-            drawSubChart("report-chart-canvas-fans-" + suf, "report-chart-no-data-fans-" + suf, data.song_fans || {}, "粉丝");
           })
           .catch(function (err) {
             alert(err && err.message ? err.message : "请求折线图数据失败");
@@ -1158,81 +1133,265 @@
             dayEl.style.display = "";
             monthEl.style.display = "none";
             yearEl.style.display = "none";
-            if (!dayEl.value) {
-              dayEl.value = today;
-            }
+            if (!dayEl.value) dayEl.value = today;
             hiddenEl.value = dayEl.value || "";
           } else if (mode === "month") {
             dayEl.style.display = "none";
             monthEl.style.display = "";
             yearEl.style.display = "none";
-            if (!monthEl.value) {
-              monthEl.value = thisMonth;
-            }
+            if (!monthEl.value) monthEl.value = thisMonth;
             hiddenEl.value = monthEl.value || "";
           } else {
             dayEl.style.display = "none";
             monthEl.style.display = "none";
             yearEl.style.display = "";
-            if (!yearEl.value) {
-              yearEl.value = yyyy;
-            }
+            if (!yearEl.value) yearEl.value = yyyy;
             hiddenEl.value = yearEl.value || "";
           }
         }
 
         dayEl.addEventListener("change", function () {
-          if (modeEl.value === "day") {
-            hiddenEl.value = dayEl.value || "";
-          }
+          if (modeEl.value === "day") hiddenEl.value = dayEl.value || "";
         });
         monthEl.addEventListener("change", function () {
-          if (modeEl.value === "month") {
-            hiddenEl.value = monthEl.value || "";
-          }
+          if (modeEl.value === "month") hiddenEl.value = monthEl.value || "";
         });
         yearEl.addEventListener("change", function () {
-          if (modeEl.value === "year") {
-            hiddenEl.value = yearEl.value || "";
-          }
+          if (modeEl.value === "year") hiddenEl.value = yearEl.value || "";
         });
 
-        if (!modeEl.value) {
-          modeEl.value = "day";
-        }
+        if (!modeEl.value) modeEl.value = "day";
         buildYearOptions(new Date());
         modeEl.addEventListener("change", syncInputByMode);
         syncInputByMode();
+
+        // 前后日期切换
+        function stepDate(delta) {
+          var mode = modeEl.value;
+          if (mode === "day") {
+            var d = dayEl.value ? new Date(dayEl.value) : new Date();
+            d.setDate(d.getDate() + delta);
+            dayEl.value = d.toISOString().slice(0, 10);
+            hiddenEl.value = dayEl.value;
+          } else if (mode === "month") {
+            var parts = (monthEl.value || "").split("-");
+            var y = parseInt(parts[0]) || new Date().getFullYear();
+            var m = parseInt(parts[1]) || new Date().getMonth() + 1;
+            m += delta;
+            if (m > 12) { m = 1; y++; }
+            if (m < 1) { m = 12; y--; }
+            monthEl.value = y + "-" + String(m).padStart(2, "0");
+            hiddenEl.value = monthEl.value;
+          } else {
+            var curY = parseInt(yearEl.value) || new Date().getFullYear();
+            curY += delta;
+            yearEl.value = String(curY);
+            hiddenEl.value = yearEl.value;
+          }
+        }
+        document.getElementById("report-prev-btn").addEventListener("click", function() { stepDate(-1); });
+        document.getElementById("report-next-btn").addEventListener("click", function() { stepDate(1); });
       })();
+
+      // 导出给外部 IIFE 使用
+      window._cr = {
+        CHART_RGB: CHART_RGB,
+        CHART_COLORS: CHART_COLORS,
+        formatChartLabels: formatChartLabels,
+        getReportChartTheme: getReportChartTheme,
+        borderColorFn: borderColorFn,
+        chartGradient: chartGradient
+      };
+
+
+    // 收藏折线图（带平台切换）— 需要在主 IIFE 作用域内访问 CHART_RGB 等变量
+    // 所以直接调用主 IIFE 暴露的函数
+    (function() {
+      var favChartInstance = null;
+      var selectEl = document.getElementById("fav-chart-platform-select");
+      if (!selectEl) return;
+
+      function loadFavChartFromSelect() {
+        var opt = selectEl.options[selectEl.selectedIndex];
+        if (!opt) return;
+        var plat = opt.value || "";
+        var mode = opt.getAttribute("data-report-mode") || "day";
+        var val = (opt.getAttribute("data-report-value") || "").trim();
+        var mid = (opt.getAttribute("data-report-artist-mid") || "").trim();
+        if (!val) return;
+
+        var canvas = document.getElementById("fav-chart-canvas");
+        var noData = document.getElementById("fav-chart-no-data");
+        if (!canvas || typeof Chart === "undefined") return;
+        if (noData) noData.style.display = "none";
+        if (favChartInstance) { favChartInstance.destroy(); favChartInstance = null; }
+
+        var url = "/api/report-chart?platform=" + encodeURIComponent(plat) +
+          "&report_mode=" + encodeURIComponent(mode) +
+          "&report_value=" + encodeURIComponent(val);
+        if (mid) url += "&report_artist_mid=" + encodeURIComponent(mid);
+
+        fetch(url)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data.ok || !data.song_favorite) {
+              if (noData) noData.style.display = "block";
+              return;
+            }
+            var payload = data.song_favorite;
+            var subLabels = payload.labels || [];
+            if (!payload.datasets || !payload.datasets.length || !subLabels.length) {
+              if (noData) noData.style.display = "block";
+              return;
+            }
+            var cr = window._cr || {};
+            var chartTheme = cr.getReportChartTheme ? cr.getReportChartTheme() : {};
+            var isDay = mode === "day";
+            var displayLabels = cr.formatChartLabels ? cr.formatChartLabels(subLabels, mode) : subLabels;
+            var lineStyle = { borderWidth: 2.6, tension: 0.42, fill: true, pointRadius: 2.5, pointHoverRadius: 6, cubicInterpolationMode: "monotone" };
+            var datasets = payload.datasets.map(function(d, i) {
+              var rgb = (cr.CHART_RGB || [])[i % (cr.CHART_RGB || []).length] || [100,100,100];
+              var color = (cr.CHART_COLORS || [])[i % (cr.CHART_COLORS || []).length] || "rgba(100,100,100,1)";
+              return Object.assign({
+                label: d.name,
+                data: d.data || [],
+                borderColor: cr.borderColorFn ? cr.borderColorFn(color) : color,
+                backgroundColor: cr.chartGradient ? cr.chartGradient(rgb[0], rgb[1], rgb[2]) : "transparent"
+              }, lineStyle);
+            });
+            favChartInstance = new Chart(canvas, {
+              type: "line",
+              data: { labels: displayLabels, datasets: datasets },
+              options: {
+                responsive: true, maintainAspectRatio: false, animation: { duration: 800 },
+                plugins: {
+                  tooltip: { mode: "index", intersect: false },
+                  legend: { position: "top", labels: { color: chartTheme.legend || "#93a4ba", font: { size: 12 }, usePointStyle: true, pointStyle: "circle", padding: 16 } }
+                },
+                scales: {
+                  x: { grid: { color: chartTheme.grid || "rgba(154,172,191,0.15)" }, ticks: { color: chartTheme.axis || "#93a4ba", maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } } },
+                  y: { grid: { color: chartTheme.grid || "rgba(154,172,191,0.15)" }, ticks: { color: chartTheme.axis || "#93a4ba", font: { size: 11 } }, beginAtZero: true }
+                },
+                interaction: { mode: "index", intersect: false }
+              }
+            });
+          })
+          .catch(function() { if (noData) noData.style.display = "block"; });
+      }
+
+      // 切换平台
+      selectEl.addEventListener("change", function() {
+        loadFavChartFromSelect();
+      });
+
+      // 默认加载
+      loadFavChartFromSelect();
+    })();
 
     })();
 
-    // 立即抓取快照
+    // 合并粉丝折线图（三平台）
     (function() {
-      var btn = document.getElementById("crawl-now-btn");
-      var status = document.getElementById("crawl-now-status");
-      if (!btn) return;
-      btn.addEventListener("click", function() {
-        btn.disabled = true;
-        btn.textContent = "抓取中...";
-        status.textContent = "三平台并发抓取，请稍候...";
-        fetch("/api/crawl-track/run-now", { method: "POST" })
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            btn.disabled = false;
-            btn.textContent = "立即抓取快照";
-            if (data.ok) {
-              status.textContent = "抓取完成 ✓";
-              setTimeout(function() { status.textContent = ""; }, 5000);
-            } else {
-              status.textContent = "失败: " + (data.error || "未知错误");
-            }
-          })
-          .catch(function(e) {
-            btn.disabled = false;
-            btn.textContent = "立即抓取快照";
-            status.textContent = "请求失败: " + e.message;
+      var sel = document.getElementById("fav-chart-platform-select");
+      if (!sel || !sel.options.length) return;
+      var reportMode = "", reportValue = "";
+      var platformConfigs = [];
+      for (var i = 0; i < sel.options.length; i++) {
+        var opt = sel.options[i];
+        var plat = opt.value || "";
+        var mode = opt.getAttribute("data-report-mode") || "day";
+        var val = (opt.getAttribute("data-report-value") || "").trim();
+        var mid = (opt.getAttribute("data-report-artist-mid") || "").trim();
+        if (!val) continue;
+        reportMode = mode;
+        reportValue = val;
+        platformConfigs.push({ platform: plat, artistMid: mid });
+      }
+      if (!platformConfigs.length || !reportValue) return;
+
+      var PLAT_NAMES = { qq: "QQ音乐", netease: "网易云音乐", kugou: "酷狗音乐" };
+      var PLAT_COLORS = { qq: "#22c55e", netease: "#ef4444", kugou: "#3b82f6" };
+
+      Promise.all(platformConfigs.map(function(cfg) {
+        var url = "/api/report-chart?platform=" + encodeURIComponent(cfg.platform) +
+          "&report_mode=" + encodeURIComponent(reportMode) +
+          "&report_value=" + encodeURIComponent(reportValue);
+        if (cfg.artistMid) url += "&report_artist_mid=" + encodeURIComponent(cfg.artistMid);
+        return fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+          return { platform: cfg.platform, data: data };
+        }).catch(function() { return { platform: cfg.platform, data: null }; });
+      })).then(function(results) {
+        var canvas = document.getElementById("fans-merged-canvas");
+        var noData = document.getElementById("fans-merged-no-data");
+        if (!canvas || typeof Chart === "undefined") return;
+
+        // 合并所有平台的时间轴，去重排序
+        var allLabelsSet = {};
+        var platData = [];
+        results.forEach(function(r) {
+          if (!r.data || !r.data.ok) return;
+          var fans = (r.data.series || {}).fans || [];
+          var lbl = r.data.labels || [];
+          if (lbl.length === 0) return;
+          var map = {};
+          for (var i = 0; i < lbl.length; i++) {
+            map[lbl[i]] = fans[i] || 0;
+            allLabelsSet[lbl[i]] = true;
+          }
+          platData.push({ platform: r.platform, map: map });
+        });
+        var labels = Object.keys(allLabelsSet).sort();
+
+        // 每个平台对齐到统一时间轴，缺失填 0
+        var datasets = [];
+        platData.forEach(function(pd) {
+          var color = PLAT_COLORS[pd.platform] || "#888";
+          var aligned = labels.map(function(l) { return pd.map[l] || 0; });
+          datasets.push({
+            label: PLAT_NAMES[pd.platform] || pd.platform,
+            data: aligned,
+            borderColor: color,
+            backgroundColor: "transparent",
+            borderWidth: 2.5,
+            tension: 0.4,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            fill: false
           });
+        });
+
+        if (!datasets.length || !labels) {
+          if (noData) noData.style.display = "block";
+          canvas.style.display = "none";
+          return;
+        }
+
+        var isDay = reportMode === "day";
+        var cr = window._cr || {};
+        var displayLabels = cr.formatChartLabels ? cr.formatChartLabels(labels, reportMode) : labels;
+        var chartTheme = cr.getReportChartTheme ? cr.getReportChartTheme() : {};
+
+        new Chart(canvas, {
+          type: "line",
+          data: { labels: displayLabels, datasets: datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 800 },
+            plugins: {
+              tooltip: { mode: "index", intersect: false },
+              legend: {
+                position: "top",
+                labels: { color: chartTheme.legend || "#93a4ba", font: { size: 12 }, usePointStyle: true, pointStyle: "circle", padding: 16 }
+              }
+            },
+            scales: {
+              x: { grid: { color: chartTheme.grid || "rgba(154,172,191,0.15)" }, ticks: { color: chartTheme.axis || "#93a4ba", maxRotation: isDay ? 45 : 0, maxTicksLimit: isDay ? 12 : 10, font: { size: 11 } } },
+              y: { grid: { color: chartTheme.grid || "rgba(154,172,191,0.15)" }, ticks: { color: chartTheme.axis || "#93a4ba", font: { size: 11 } }, beginAtZero: true }
+            },
+            interaction: { mode: "index", intersect: false }
+          }
+        });
       });
     })();
   </script>

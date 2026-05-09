@@ -19,7 +19,7 @@ from .constants import NEW_SONG_NAME
 from .paths import SUPPORTED_PLATFORMS, _resolve_changes_db_path, _resolve_toplist_db_path
 
 # 变化报告页：各平台「收藏增长 / 粉丝增长」条形图及汇总仅展示增量 >= 该阈值的项
-MIN_CHANGE_REPORT_DISPLAY_DELTA = 10
+MIN_CHANGE_REPORT_DISPLAY_DELTA = 0
 
 
 def get_report(

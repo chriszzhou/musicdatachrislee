@@ -4,60 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>酷狗歌曲热度</title>
+  <link rel="stylesheet" href="/scripts/common.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    :root {
-      --bg: #0f141d; --card: #171f2b; --border: #2a3547; --text: #d7e1f0;
-      --muted: #93a4ba; --primary: #5f8fd6; --error-bg: #341c22; --error-text: #ffa2b1;
-      --card-soft: #121a26; --shadow-soft: 0 10px 24px rgba(6, 10, 20, 0.32);
-      --chart-grid: rgba(154, 172, 191, 0.2);
-    }
-    body[data-theme="light"] {
-      --bg: #f4f7ff; --card: #ffffff; --border: #e3e8f5; --text: #1f2a44;
-      --muted: #65708a; --primary: #3b82f6; --error-bg: #fef2f2; --error-text: #b91c1c;
-      --card-soft: #fbfdff; --shadow-soft: 0 8px 24px rgba(30, 70, 140, 0.08);
-      --chart-grid: rgba(148, 163, 184, 0.28);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
-      color: var(--text); line-height: 1.55;
-      background: linear-gradient(0deg, rgba(15,22,34,0.70), rgba(15,22,34,0.70)), url("/scripts/2.jpg") center/cover no-repeat fixed;
-    }
-    body[data-theme="light"] {
-      background: linear-gradient(0deg, rgba(244,248,255,0.70), rgba(244,248,255,0.70)), url("/scripts/2.jpg") center/cover no-repeat fixed;
-    }
-    .page { width: 100%; max-width: 1200px; margin: 0 auto; padding: 14px 18px 24px; }
-    .header-card {
-      position: relative; overflow: hidden;
-      background: linear-gradient(135deg, #1e2a3b 0%, #162132 100%);
-      border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px;
-      box-shadow: var(--shadow-soft); margin-bottom: 12px;
-    }
-    .header-card::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(150,182,230,0.18) 0%, rgba(11,20,34,0.04) 100%); pointer-events: none; }
-    .header-card > * { position: relative; z-index: 2; }
-    body[data-theme="light"] .header-card { background: linear-gradient(135deg, #fff 0%, #f7faff 100%); }
-    .title { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
-    .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
-    .header-actions { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .nav-links a { color: var(--primary); text-decoration: none; margin-right: 14px; }
-    .nav-links a:hover { text-decoration: underline; }
-    button.theme-toggle { min-height: 30px; padding: 5px 12px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #1f2c3f; color: #d7e4fa; cursor: pointer; }
-    body[data-theme="light"] button.theme-toggle { background: #fff; color: #334155; }
-    .block { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px 12px; margin-top: 12px; box-shadow: var(--shadow-soft); }
-    .block h3 { margin: 0 0 10px; font-size: 17px; font-weight: 650; }
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-    .metric-item { background: var(--card-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; text-align: center; }
-    .metric-value { font-size: 22px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
-    .metric-label { font-size: 12px; color: var(--muted); }
-    .record-list { list-style: none; padding: 0; margin: 0; }
-    .record-list li { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
-    .record-list li:last-child { border-bottom: none; }
-    .record-date { color: var(--muted); font-size: 12px; margin-left: 8px; }
-    .chart-wrap { width: 100%; height: 260px; padding: 16px; background: var(--card-soft); border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow-soft); margin-top: 10px; }
-    .loading { text-align: center; color: var(--muted); padding: 20px; }
-    .err { color: var(--error-text); background: var(--error-bg); padding: 8px 12px; border-radius: 8px; margin-top: 8px; display: none; }
-    @media (max-width: 600px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } .chart-wrap { height: 200px; } }
+    .err { display: none; }
   </style>
 </head>
 <body>
@@ -67,7 +17,9 @@
       <p class="subtitle" id="song-subtitle">加载中...</p>
       <div class="header-actions">
         <div class="nav-links">
-          <a href="/">← 首页</a>
+          <a href="/">首页</a>
+          <a href="/changereport">变化报告</a>
+          <a href="/new-song">新歌</a>
           <a href="https://activity.kugou.com/chart/v-6540f41e/index.html?mixsongid={{ mixsongid }}" target="_blank">酷狗原页</a>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()">切换主题</button>
@@ -89,7 +41,12 @@
       </div>
 
       <div class="block" id="chart-block" style="display:none;">
-        <h3>近 7 天指数趋势</h3>
+        <h3 id="chart-title">指数趋势</h3>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;" id="chart-range-btns">
+          <button type="button" class="range-btn active" data-key="chart" data-label="近 7 天">近 7 天</button>
+          <button type="button" class="range-btn" data-key="chart_30d" data-label="近 30 天">近 30 天</button>
+          <button type="button" class="range-btn" data-key="chart_183d" data-label="近半年">近半年</button>
+        </div>
         <div class="chart-wrap">
           <canvas id="heat-chart"></canvas>
         </div>
@@ -125,9 +82,16 @@
         });
     }
 
+    var heatChartInstance = null;
+    var cachedData = null;
+
     function renderData(d) {
+      cachedData = d;
       document.getElementById("song-title").textContent = d.song_name || mixsongid;
-      document.getElementById("song-subtitle").textContent = d.album_name || "";
+      var authors = (d.author_names || []).join(", ");
+      var subtitle = authors || "";
+      if (d.album_name) subtitle += (subtitle ? " · " : "") + d.album_name;
+      document.getElementById("song-subtitle").textContent = subtitle;
       document.title = (d.song_name || "酷狗歌曲") + " - 热度";
 
       var metrics = [];
@@ -166,14 +130,38 @@
         }).join("");
       }
 
-      // 图表
-      var chart = d.chart || d.chart_30d;
-      if (chart && chart.date_list && chart.score_list) {
+      // 图表 — 选择最优数据源并显示
+      var chartKey = d.chart ? "chart" : d.chart_30d ? "chart_30d" : d.chart_183d ? "chart_183d" : "";
+      if (chartKey) {
         document.getElementById("chart-block").style.display = "block";
-        renderChart(chart.date_list, chart.score_list);
+        switchChart(chartKey);
       }
 
       document.getElementById("content").style.display = "block";
+    }
+
+    function switchChart(key) {
+      if (!cachedData) return;
+      var chart = cachedData[key];
+      if (!chart || !chart.date_list || !chart.score_list) return;
+      // 更新按钮状态和标题
+      var btns = document.querySelectorAll("#chart-range-btns .range-btn");
+      var label = "";
+      btns.forEach(function(b) {
+        if (b.getAttribute("data-key") === key) {
+          b.classList.add("active");
+          label = b.getAttribute("data-label");
+          // 灰掉无数据的按钮
+        } else {
+          b.classList.remove("active");
+        }
+        var bk = b.getAttribute("data-key");
+        var hasData = cachedData[bk] && cachedData[bk].date_list && cachedData[bk].date_list.length > 0;
+        b.disabled = !hasData;
+        b.style.opacity = hasData ? "1" : "0.4";
+      });
+      document.getElementById("chart-title").textContent = (label || "指数") + "趋势";
+      renderChart(chart.date_list, chart.score_list);
     }
 
     function renderChart(dates, scores) {
@@ -183,7 +171,8 @@
       });
       var isDark = document.body.getAttribute("data-theme") !== "light";
       var ctx = document.getElementById("heat-chart").getContext("2d");
-      new Chart(ctx, {
+      if (heatChartInstance) { heatChartInstance.destroy(); heatChartInstance = null; }
+      heatChartInstance = new Chart(ctx, {
         type: "line",
         data: {
           labels: labels,
@@ -206,6 +195,13 @@
         }
       });
     }
+
+    // 时间范围切换
+    document.getElementById("chart-range-btns").addEventListener("click", function(e) {
+      var btn = e.target.closest(".range-btn");
+      if (!btn || btn.classList.contains("active") || btn.disabled) return;
+      switchChart(btn.getAttribute("data-key"));
+    });
   </script>
 </body>
 </html>

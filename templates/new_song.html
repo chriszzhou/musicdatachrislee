@@ -235,7 +235,8 @@
       <p class="subtitle" id="last-update-line"><span id="last-update-at">--</span></p>
       <div class="header-actions">
         <div class="nav-links">
-          <a href="/">← 首页</a>
+          <a href="/">首页</a>
+          <a href="/changereport">变化报告</a>
         </div>
       </div>
     </div>
@@ -348,7 +349,7 @@
           var v = platforms[p];
           if (!v) return;
           if (v.ok) {
-            html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? v.favorite_count : "-") + "</td></tr>";
+            html += "<tr><td>" + (v.platform_name || p) + "</td><td>" + (v.favorite_count != null ? Number(v.favorite_count).toLocaleString() : "-") + "</td></tr>";
           } else {
             html += "<tr><td>" + p + "</td><td class=\"err\">" + (v.error || "无数据") + "</td></tr>";
           }

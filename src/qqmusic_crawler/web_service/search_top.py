@@ -314,10 +314,43 @@ def get_artist_snapshot_metrics_all_platforms(
         finally:
             conn.close()
 
+        # 读前一份快照计算环比
+        prev_fans = None
+        prev_fav_sum = None
+        prev_candidates = sorted(
+            [p for p in snapshots_dir.glob("{}_{}_*.db".format(prefix, artist_mid))
+             if p != latest],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if prev_candidates:
+            prev_path = prev_candidates[0]
+            prev_conn = connect_sqlite(prev_path)
+            try:
+                try:
+                    pr = prev_conn.execute(
+                        "SELECT COALESCE(fans, 0) FROM artists WHERE artist_mid = ? LIMIT 1",
+                        (artist_mid,),
+                    ).fetchone()
+                    if pr and pr[0] is not None:
+                        prev_fans = int(pr[0])
+                except (sqlite3.OperationalError, TypeError, ValueError):
+                    pass
+                pr2 = prev_conn.execute(
+                    "SELECT COALESCE(SUM(COALESCE(favorite_count_text, 0)), 0) FROM songs WHERE artist_mid = ?",
+                    (artist_mid,),
+                ).fetchone()
+                if pr2:
+                    prev_fav_sum = int(pr2[0] or 0)
+            finally:
+                prev_conn.close()
+
         by_platform[plat] = {
             "ok": True,
             "fans": fans,
             "favorite_sum": fav_sum,
+            "prev_fans": prev_fans,
+            "prev_favorite_sum": prev_fav_sum,
             "platform_name": pname,
             "artist_mid": artist_mid,
             "resolved_name": resolved_name,
