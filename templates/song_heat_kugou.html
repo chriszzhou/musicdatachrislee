@@ -95,28 +95,43 @@
       document.title = (d.song_name || "酷狗歌曲") + " - 热度";
 
       var metrics = [];
-      if (d.exponent != null) metrics.push({label: "酷狗指数", value: Math.round(d.exponent).toLocaleString()});
-      if (d.exponent_diff != null) {
-        var diff = parseFloat(d.exponent_diff);
-        var diffStr = (diff > 0 ? "+" : "") + Math.round(diff).toLocaleString();
-        var diffColor = diff > 0 ? "#63d9aa" : diff < 0 ? "#ffa2b1" : "var(--muted)";
-        metrics.push({label: "指数变化", value: diffStr, color: diffColor});
+      if (d.exponent != null) {
+        var expItem = {label: "酷狗指数", value: Math.round(d.exponent).toLocaleString()};
+        if (d.exponent_diff != null) {
+          var diff = parseFloat(d.exponent_diff);
+          var diffStr = (diff > 0 ? "+" : "") + Math.round(diff).toLocaleString();
+          var diffColor = diff > 0 ? "#63d9aa" : diff < 0 ? "#ffa2b1" : "var(--muted)";
+          expItem.sub = {value: diffStr, color: diffColor};
+        }
+        metrics.push(expItem);
       }
-      if (d.rank != null) metrics.push({label: "排名", value: "#" + d.rank.toLocaleString()});
-      if (d.rank_diff != null) {
-        var rd = parseInt(d.rank_diff);
-        var rdStr = rd < 0 ? "↑" + Math.abs(rd) : rd > 0 ? "↓" + rd : "-";
-        var rdColor = rd < 0 ? "#63d9aa" : rd > 0 ? "#ffa2b1" : "var(--muted)";
-        metrics.push({label: "排名变化", value: rdStr, color: rdColor});
+      if (d.rank != null) {
+        var rankItem = {label: "排名", value: "#" + d.rank.toLocaleString()};
+        if (d.rank_diff != null) {
+          var rd = parseInt(d.rank_diff);
+          var rdStr = rd < 0 ? "↑" + Math.abs(rd) : rd > 0 ? "↓" + rd : "-";
+          var rdColor = rd < 0 ? "#63d9aa" : rd > 0 ? "#ffa2b1" : "var(--muted)";
+          rankItem.sub = {value: rdStr, color: rdColor};
+        }
+        metrics.push(rankItem);
       }
       if (d.collect_count != null) metrics.push({label: "收藏量", value: Number(d.collect_count).toLocaleString()});
-      if (d.listener_num != null) metrics.push({label: "收听人数", value: Number(d.listener_num).toLocaleString()});
-      if (d.listener_num_incr != null) metrics.push({label: "今日收听增量", value: "+" + Number(d.listener_num_incr).toLocaleString()});
+      if (d.listener_num != null) {
+        var listenItem = {label: "收听人数", value: Number(d.listener_num).toLocaleString()};
+        if (d.listener_num_incr != null) {
+          listenItem.sub = {value: "+" + Number(d.listener_num_incr).toLocaleString(), color: "#63d9aa"};
+        }
+        metrics.push(listenItem);
+      }
 
       var grid = document.getElementById("metrics-grid");
       grid.innerHTML = metrics.map(function(m) {
-        var style = m.color ? ' style="color:' + m.color + '"' : '';
-        return '<div class="metric-item"><div class="metric-value"' + style + '>' + m.value + '</div><div class="metric-label">' + m.label + '</div></div>';
+        var html = '<div class="metric-item"><div class="metric-value">' + m.value + '</div>';
+        if (m.sub) {
+          html += '<div style="font-size:13px;color:' + m.sub.color + ';">' + m.sub.value + '</div>';
+        }
+        html += '<div class="metric-label" style="margin-top:auto;">' + m.label + '</div></div>';
+        return html;
       }).join("");
 
       // 上榜记录

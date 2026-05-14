@@ -9,6 +9,7 @@ from ..sqlite_util import connect_sqlite
 from ..toplist_storage import get_artist_mid_from_toplist_db
 from ..tracking import (
     _ensure_changes_tables,
+    _ensure_month_table,
     _list_change_month_tables,
     _report_month_keys,
     _table_name,
@@ -68,70 +69,114 @@ def get_report(
         label = "日期"
 
     changes_db_path = _resolve_changes_db_path(platform, base_dir)
-    report = report_changes(
-        changes_db_file=changes_db_path,
-        date_str=date_str,
-        month_str=month_str,
-        year_str=year_str,
-        artist_mid=(artist_mid or "").strip() or None,
-        limit=100000,
-    )
-    metric_rows = report.get("metric_changes", [])
-    artist_metric_rows = report.get("artist_metric_changes", [])
 
-    song_deltas: Dict[str, Dict[str, Any]] = {}
-    for row in metric_rows:
-        metric = str(row.get("metric") or "")
-        if metric != "favorite_count_text":
-            continue
-        delta = int(row.get("delta") or 0)
-        run_at = str(row.get("run_at") or "")
-        new_value = row.get("new_value")
-        old_value = int(row.get("old_value") or 0)
-        if old_value == 0:
-            continue
-        if delta <= 0:
-            # 仅展示增长数据，过滤减少与无变化。
-            continue
-        song_mid = str(row.get("song_mid") or "").strip()
-        if not song_mid:
-            continue
-        song_name = str(row.get("song_name") or song_mid).strip()
-        if song_mid not in song_deltas:
-            song_deltas[song_mid] = {
-                "song_name": song_name,
-                "favorite": 0,
-                "favorite_new": None,
-                "favorite_run_at": "",
+    conn = connect_sqlite(changes_db_path, row_factory=sqlite3.Row)
+    try:
+        _ensure_changes_tables(conn)
+        month_keys_metric = _report_month_keys(conn, "metric_changes", year_str, month_str, date_str)
+        month_keys_artist = _report_month_keys(conn, "artist_metric_changes", year_str, month_str, date_str)
+        if not month_keys_metric:
+            month_keys_metric = [datetime.now().strftime("%Y%m")]
+        if not month_keys_artist:
+            month_keys_artist = [datetime.now().strftime("%Y%m")]
+        for mk in month_keys_metric:
+            _ensure_month_table(conn, "metric_changes", mk)
+        for mk in month_keys_artist:
+            _ensure_month_table(conn, "artist_metric_changes", mk)
+
+        def _from(base: str, keys: List[str]) -> str:
+            if len(keys) == 1:
+                return _table_name(base, keys[0])
+            parts = ["SELECT * FROM {}".format(_table_name(base, mk)) for mk in keys]
+            return "({}) AS {}".format(" UNION ALL ".join(parts), base)
+
+        metric_from = _from("metric_changes", month_keys_metric)
+        artist_from = _from("artist_metric_changes", month_keys_artist)
+
+        amid = (artist_mid or "").strip()
+        artist_filter = " AND artist_mid = ?" if amid else ""
+        base_params: List[object] = []
+        if year_str:
+            where_sql = "substr(run_at, 1, 4) = ?"
+            base_params = [year_str]
+        elif month_str:
+            where_sql = "substr(run_at, 1, 7) = ?"
+            base_params = [month_str]
+        else:
+            where_sql = "date(run_at) = ?"
+            base_params = [date_str or datetime.now().strftime("%Y-%m-%d")]
+        q_params = list(base_params) + ([amid] if amid else [])
+
+        # 歌曲收藏：SQL 层按 song_mid 聚合 + MAX trick 取最新 new_value
+        fav_rows = conn.execute(
+            """
+            SELECT song_mid, song_name,
+                   SUM(CASE WHEN delta > 0 THEN delta ELSE 0 END) AS total_delta,
+                   MAX(run_at) AS last_run_at,
+                   SUBSTR(
+                       MAX(run_at || '|' || CAST(new_value AS TEXT)),
+                       INSTR(MAX(run_at || '|' || CAST(new_value AS TEXT)), '|') + 1
+                   ) AS latest_new_value
+            FROM {tbl}
+            WHERE {whr} {af}
+              AND metric = 'favorite_count_text'
+              AND is_init = 0
+            GROUP BY song_mid
+            HAVING total_delta > 0
+            """.format(tbl=metric_from, whr=where_sql, af=artist_filter),
+            q_params,
+        ).fetchall()
+
+        song_deltas: Dict[str, Dict[str, Any]] = {}
+        for row in fav_rows:
+            mid = str(row["song_mid"] or "").strip()
+            if not mid:
+                continue
+            name = str(row["song_name"] or mid).strip() or mid
+            delta = int(row["total_delta"] or 0)
+            nv = row["latest_new_value"]
+            song_deltas[mid] = {
+                "song_name": name,
+                "favorite": delta,
+                "favorite_new": int(nv) if nv is not None else None,
+                "favorite_run_at": str(row["last_run_at"] or ""),
             }
-        if song_name and song_name != song_mid:
-            song_deltas[song_mid]["song_name"] = song_name
-        song_deltas[song_mid]["favorite"] += delta
-        if run_at >= str(song_deltas[song_mid]["favorite_run_at"]):
-            song_deltas[song_mid]["favorite_run_at"] = run_at
-            song_deltas[song_mid]["favorite_new"] = new_value
 
-    artist_deltas: Dict[str, Dict[str, Any]] = {}
-    for row in artist_metric_rows:
-        if str(row.get("metric") or "") != "fans":
-            continue
-        old_value = int(row.get("old_value") or 0)
-        if old_value == 0:
-            continue
-        delta = int(row.get("delta") or 0)
-        if delta <= 0:
-            # 仅展示增长数据，过滤减少与无变化。
-            continue
-        run_at = str(row.get("run_at") or "")
-        new_value = row.get("new_value")
-        artist_name = str(row.get("artist_name") or row.get("artist_mid") or "").strip()
-        if artist_name:
-            if artist_name not in artist_deltas:
-                artist_deltas[artist_name] = {"delta": 0, "new": None, "run_at": ""}
-            artist_deltas[artist_name]["delta"] += delta
-            if run_at >= str(artist_deltas[artist_name]["run_at"]):
-                artist_deltas[artist_name]["run_at"] = run_at
-                artist_deltas[artist_name]["new"] = new_value
+        # 粉丝：SQL 层按 artist_name 聚合 + MAX trick 取最新 new_value
+        artist_q_params = list(base_params) + ([amid] if amid else [])
+        fans_rows = conn.execute(
+            """
+            SELECT artist_name,
+                   SUM(CASE WHEN delta > 0 THEN delta ELSE 0 END) AS total_delta,
+                   MAX(run_at) AS last_run_at,
+                   SUBSTR(
+                       MAX(run_at || '|' || CAST(new_value AS TEXT)),
+                       INSTR(MAX(run_at || '|' || CAST(new_value AS TEXT)), '|') + 1
+                   ) AS latest_new_value
+            FROM {tbl}
+            WHERE {whr} {af}
+              AND metric = 'fans'
+              AND is_init = 0
+            GROUP BY artist_name
+            HAVING total_delta > 0
+            """.format(tbl=artist_from, whr=where_sql, af=artist_filter),
+            artist_q_params,
+        ).fetchall()
+
+        artist_deltas: Dict[str, Dict[str, Any]] = {}
+        for row in fans_rows:
+            aname = str(row["artist_name"] or "").strip()
+            if not aname:
+                continue
+            delta = int(row["total_delta"] or 0)
+            nv = row["latest_new_value"]
+            artist_deltas[aname] = {
+                "delta": delta,
+                "new": int(nv) if nv is not None else None,
+                "run_at": str(row["last_run_at"] or ""),
+            }
+    finally:
+        conn.close()
 
     favorite_items: List[Tuple[int, bool, str]] = []
     favorite_chart_rows: List[Dict[str, Any]] = []
@@ -222,25 +267,33 @@ def get_reports_all_platforms(
     base_dir: Optional[Path] = None,
     song_display_limit: int = 15,
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
-    """为 QQ / 网易云 / 酷狗 各生成一份变化报告。artist_name 为空时不按歌手过滤。"""
-    reports: Dict[str, Dict[str, Any]] = {}
-    mids: Dict[str, str] = {}
+    """为 QQ / 网易云 / 酷狗 各生成一份变化报告。三平台并行查询。"""
+    from concurrent.futures import ThreadPoolExecutor
+
     name_stub = (artist_name or "").strip()
+    mids: Dict[str, str] = {}
     for plat in SUPPORTED_PLATFORMS:
-        mid = ""
         if name_stub:
             db_file = _resolve_toplist_db_path(plat, base_dir)
             resolved = get_artist_mid_from_toplist_db(db_file, name_stub)
-            mid = (resolved or "").strip()
-        mids[plat] = mid
-        reports[plat] = get_report(
+            mids[plat] = (resolved or "").strip()
+        else:
+            mids[plat] = ""
+
+    def _run_one(plat: str) -> Tuple[str, Dict[str, Any]]:
+        return plat, get_report(
             platform=plat,
             mode=mode,
             value=value,
-            artist_mid=mid,
+            artist_mid=mids[plat],
             song_display_limit=song_display_limit,
             base_dir=base_dir,
         )
+
+    reports: Dict[str, Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for plat, report in pool.map(_run_one, SUPPORTED_PLATFORMS):
+            reports[plat] = report
     return reports, mids
 
 
@@ -311,6 +364,11 @@ def get_report_chart_data(
         if not month_keys_artist:
             month_keys_artist = [datetime.now().strftime("%Y%m")]
 
+        for mk in month_keys_metric:
+            _ensure_month_table(conn, "metric_changes", mk)
+        for mk in month_keys_artist:
+            _ensure_month_table(conn, "artist_metric_changes", mk)
+
         def _from_clause(base: str, keys: List[str]) -> str:
             if len(keys) == 1:
                 return _table_name(base, keys[0])
@@ -354,102 +412,95 @@ def get_report_chart_data(
             params_main = list(base_params) + ([(artist_mid or "").strip()] if (artist_mid or "").strip() else []) + [NEW_SONG_NAME]
             labels_rows = conn.execute(run_at_with_other_songs_sql, params_main).fetchall()
             labels = [str(r[0]) for r in labels_rows]
+            labels_from_song_query = False
         else:
-            labels_sql = (
-                "SELECT {} AS period FROM {} WHERE {} {} {} GROUP BY period ORDER BY period".format(
-                    group_sql, metric_from, where_sql, artist_filter, song_filter
-                )
-            )
-            labels_rows = conn.execute(labels_sql, params).fetchall()
-            labels = [str(r[0]) for r in labels_rows]
+            labels = []
+            labels_from_song_query = True
+
+        amid = (artist_mid or "").strip()
+        sname = (song_name or "").strip()
+        base_q_params = list(base_params) + ([amid] if amid else []) + ([sname] if sname else [])
+        base_q_params_artist = list(base_params) + ([amid] if amid else [])
+
+        # 一次查询完成：按 (period, song_mid) 聚合收藏，从中推导 labels 和 series_favorite
+        song_rows = conn.execute(
+            """
+            SELECT {grp} AS period, song_mid, song_name, COALESCE(SUM(delta), 0) AS sdelta
+            FROM {tbl}
+            WHERE {whr} {af} {sf} AND metric = 'favorite_count_text' AND is_init = 0
+            GROUP BY {grp}, song_mid
+            """.format(grp=group_sql, tbl=metric_from, whr=where_sql, af=artist_filter, sf=song_filter),
+            base_q_params,
+        ).fetchall()
+
+        # 从 song_rows 推导 labels（如果不是 day 模式的特殊处理）
+        if labels_from_song_query:
+            labels_set: set = set()
+            for row in song_rows:
+                labels_set.add(str(row[0]))
+            labels = sorted(labels_set)
 
         if not labels:
-            empty = {"labels": [], "datasets": []}
+            empty: Dict[str, Any] = {"labels": [], "datasets": []}
             return {"ok": True, "labels": [], "series": {"favorite": [], "fans": []}, "song_favorite": empty, "song_fans": empty}
 
-        series_favorite: List[int] = []
-        series_fans: List[int] = []
+        label_index = {p: i for i, p in enumerate(labels)}
 
-        for period in labels:
-            if mode_clean == "day":
-                period_where = "run_at = ?"
-                period_params = [period]
-            else:
-                period_where = "substr(run_at, 1, {}) = ?".format(len(period))
-                period_params = [period]
-            if (artist_mid or "").strip():
-                period_params = period_params + [(artist_mid or "").strip()]
-            if (song_name or "").strip():
-                period_params = period_params + [(song_name or "").strip()]
+        # 从 song_rows 构建 series_favorite 和按歌曲维度数据
+        series_favorite: List[int] = [0] * len(labels)
+        top_songs = 10
+        favorite_by_song: Dict[str, List[int]] = {}
+        song_names: Dict[str, str] = {}
 
-            if use_absolute_favorite:
+        if use_absolute_favorite:
+            # 绝对值模式：需要逐 period 取最后 new_value，单独查询
+            for period in labels:
+                if mode_clean == "day":
+                    period_where = "run_at = ?"
+                else:
+                    period_where = "substr(run_at, 1, {}) = ?".format(len(period))
+                pp = [period] + ([amid] if amid else []) + ([sname] if sname else [])
                 fav_row = conn.execute(
                     """
                     SELECT new_value FROM {}
                     WHERE {} {} {} AND metric = 'favorite_count_text'
                     ORDER BY run_at DESC LIMIT 1
                     """.format(metric_from, period_where, artist_filter, song_filter),
-                    period_params,
+                    pp,
                 ).fetchone()
-                series_favorite.append(int(fav_row[0] or 0) if fav_row else 0)
-            else:
-                fav_row = conn.execute(
-                    """
-                    SELECT COALESCE(SUM(delta), 0) AS s
-                    FROM {}
-                    WHERE {} {} {} AND metric = 'favorite_count_text'
-                    """.format(metric_from, period_where, artist_filter, song_filter),
-                    period_params,
-                ).fetchone()
-                series_favorite.append(int(fav_row[0] or 0))
+                idx = label_index[period]
+                series_favorite[idx] = int(fav_row[0] or 0) if fav_row else 0
 
-            period_params_artist = [period] + ([(artist_mid or "").strip()] if (artist_mid or "").strip() else [])
-            fans_row = conn.execute(
-                """
-                SELECT COALESCE(SUM(delta), 0) AS s
-                FROM {}
-                WHERE {} {} AND metric = 'fans'
-                """.format(artist_from, period_where, artist_filter),
-                period_params_artist,
-            ).fetchone()
-            series_fans.append(int(fans_row[0] or 0))
+        for row in song_rows:
+            period_key = str(row[0])
+            mid = str(row[1] or "").strip()
+            if not mid:
+                continue
+            name = str(row[2] or mid).strip() or mid
+            delta = int(row[3] or 0)
+            idx = label_index.get(period_key)
+            if idx is None:
+                continue
+            if not use_absolute_favorite:
+                series_favorite[idx] += delta
+            if mid not in song_names:
+                song_names[mid] = name
+            if mid not in favorite_by_song:
+                favorite_by_song[mid] = [0] * len(labels)
+            favorite_by_song[mid][idx] = delta
 
-        # 按歌曲维度的收藏：每期按 song_mid 聚合，取总变化量最大的 top_songs 首
-        top_songs = 10
-        favorite_by_song: Dict[str, List[int]] = {}
-        song_names: Dict[str, str] = {}
-
-        for period_idx, period in enumerate(labels):
-            if mode_clean == "day":
-                period_where = "run_at = ?"
-                period_params = [period]
-            else:
-                period_where = "substr(run_at, 1, {}) = ?".format(len(period))
-                period_params = [period]
-            if (artist_mid or "").strip():
-                period_params = period_params + [(artist_mid or "").strip()]
-            if (song_name or "").strip():
-                period_params = period_params + [(song_name or "").strip()]
-
-            for row in conn.execute(
-                """
-                SELECT song_mid, song_name, COALESCE(SUM(delta), 0) AS s
-                FROM {}
-                WHERE {} {} {} AND metric = 'favorite_count_text'
-                GROUP BY song_mid
-                """.format(metric_from, period_where, artist_filter, song_filter),
-                period_params,
-            ).fetchall():
-                mid = str(row[0] or "").strip()
-                if not mid:
-                    continue
-                name = str(row[1] or mid).strip() or mid
-                delta = int(row[2] or 0)
-                if mid not in song_names:
-                    song_names[mid] = name
-                if mid not in favorite_by_song:
-                    favorite_by_song[mid] = [0] * len(labels)
-                favorite_by_song[mid][period_idx] = delta
+        # 一次 GROUP BY 查出所有 period 的粉丝 delta 合计
+        fans_rows = conn.execute(
+            """
+            SELECT {grp}, COALESCE(SUM(delta), 0)
+            FROM {tbl}
+            WHERE {whr} {af} AND metric = 'fans' AND is_init = 0
+            GROUP BY {grp} ORDER BY {grp}
+            """.format(grp=group_sql, tbl=artist_from, whr=where_sql, af=artist_filter),
+            base_q_params_artist,
+        ).fetchall()
+        fans_map = {str(r[0]): int(r[1] or 0) for r in fans_rows}
+        series_fans = [fans_map.get(p, 0) for p in labels]
 
         def _top_datasets(
             by_song: Dict[str, List[int]],

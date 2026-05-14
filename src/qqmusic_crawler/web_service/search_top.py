@@ -143,6 +143,7 @@ def search_songs(
     keyword: str,
     base_dir: Optional[Path] = None,
     limit: int = 200,
+    offset: int = 0,
 ) -> Dict[str, Any]:
     """
     从当前平台最新一次快照中搜索歌曲。
@@ -163,6 +164,7 @@ def search_songs(
         return {"ok": False, "error": "未找到任何快照，请先执行抓取。"}
     latest = max(candidates, key=lambda p: p.stat().st_mtime)
     limit_safe = min(max(1, limit), 500)
+    offset_safe = max(0, offset)
     like_arg = "%{}%".format(keyword)
     conn = connect_sqlite(latest)
     try:
@@ -178,17 +180,20 @@ def search_songs(
             sel + """
             WHERE (name LIKE ? OR (album_name IS NOT NULL AND album_name LIKE ?))
             ORDER BY COALESCE(favorite_count_text, 0) DESC, song_mid ASC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (like_arg, like_arg, limit_safe),
+            (like_arg, like_arg, limit_safe + 1, offset_safe),
         )
         rows = cur.fetchall()
     finally:
         conn.close()
+    has_more = len(rows) > limit_safe
+    rows = rows[:limit_safe]
     return {
         "ok": True,
         "snapshot_name": latest.name,
         "keyword": keyword,
+        "has_more": has_more,
         "rows": [
             {
                 "song_mid": r[0] or "",
@@ -206,6 +211,7 @@ def search_songs_all_platforms(
     keyword: str,
     base_dir: Optional[Path] = None,
     limit: int = 200,
+    offset: int = 0,
 ) -> Dict[str, Any]:
     """三平台各自最新快照中搜索歌曲；各平台结果独立，失败不影响其它平台。"""
     keyword = (keyword or "").strip()
@@ -215,7 +221,7 @@ def search_songs_all_platforms(
     by_platform: Dict[str, Dict[str, Any]] = {}
     err_parts: List[str] = []
     for plat in SUPPORTED_PLATFORMS:
-        data = search_songs(platform=plat, keyword=keyword, base_dir=base_dir, limit=limit)
+        data = search_songs(platform=plat, keyword=keyword, base_dir=base_dir, limit=limit, offset=offset)
         by_platform[plat] = data
         if not data.get("ok"):
             err_parts.append(

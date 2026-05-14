@@ -237,6 +237,44 @@ class KugouMusicClient:
             )
         return result
 
+    def search_songs_by_name(self, keyword: str, page: int = 1, page_size: int = 10) -> List[Dict[str, Any]]:
+        """通过歌曲名搜索歌曲（酷狗搜索接口）。"""
+        kw = (keyword or "").strip()
+        if not kw:
+            return []
+        data = self._get_json(
+            "/api/v3/search/song",
+            {
+                "format": "json",
+                "keyword": kw,
+                "page": str(max(page, 1)),
+                "pagesize": str(max(page_size, 1)),
+                "showtype": "1",
+            },
+        )
+        info = data.get("data", {}).get("info", [])
+        if not isinstance(info, list):
+            return []
+        result: List[Dict[str, Any]] = []
+        for item in info:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("songname") or "").strip()
+            album_name = str(item.get("album_name") or "").strip()
+            singer_name = str(item.get("singername") or "").strip()
+            hash_val = str(item.get("hash") or "").strip()
+            album_id = item.get("album_id")
+            mixsongid = item.get("album_audio_id") or item.get("mixsongid") or item.get("audio_id")
+            result.append({
+                "name": name,
+                "album_name": album_name,
+                "singer_name": singer_name,
+                "hash": hash_val,
+                "album_id": album_id,
+                "mixsongid": mixsongid,
+            })
+        return result
+
     def fetch_songs_by_artist(
         self, artist_mid: str, page: int, page_size: int
     ) -> List[Dict[str, Any]]:

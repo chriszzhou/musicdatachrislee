@@ -4,6 +4,7 @@ import asyncio
 import functools
 import json
 import os
+import time as _time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypeVar
@@ -20,7 +21,6 @@ from . import schedulers as _sched
 from .config import settings
 from .web_service import (
     SUPPORTED_PLATFORMS,
-    delete_milestone_entry,
     get_artist_snapshot_metrics_all_platforms,
     get_milestone_logs,
     get_new_song_chart_data,
@@ -36,7 +36,6 @@ from .web_service import (
     search_songs_all_platforms,
     resolve_data_paths_for_debug,
 )
-from .web_service.milestones import prune_milestone_logs_sub_10k_entries
 from .heat_scraper import get_song_heat, close_browser, fetch_batch_listen_users
 from .heat_api import get_songs_heat_batch
 from .client import QQMusicClient
@@ -220,7 +219,6 @@ def _toplist_run_now_payload() -> Dict[str, Any]:
 
 @app.on_event("startup")
 async def _start_schedulers() -> None:
-    prune_milestone_logs_sub_10k_entries(PROJECT_ROOT)
     _sched.start_background_schedulers(PROJECT_ROOT)
 
 
@@ -376,6 +374,349 @@ async def api_search_songs(song_keyword: str = "", limit: int = 5) -> JSONRespon
     return JSONResponse(data)
 
 
+@app.get("/api/search-songs-with-heat")
+async def api_search_songs_with_heat(song_keyword: str = "", limit: int = 10, offset: int = 0) -> JSONResponse:
+    """歌曲搜索 + 热度：三平台快照搜索后，QQ 和酷狗追加热度数据。"""
+    keyword = (song_keyword or "").strip()
+    limit_safe = min(max(1, int(limit)), 50)
+    offset_safe = max(0, int(offset))
+    data = await _run_in_thread(
+        search_songs_all_platforms,
+        keyword=keyword,
+        base_dir=PROJECT_ROOT,
+        limit=limit_safe,
+        offset=offset_safe,
+    )
+    if not data.get("ok"):
+        return JSONResponse(data)
+
+    import asyncio as _aio
+    bp = data.get("by_platform", {})
+
+    # QQ: fetch heat (score + cnt)
+    qq_rows = (bp.get("qq") or {}).get("rows") or []
+    qq_mids = [r["song_mid"] for r in qq_rows if r.get("song_mid")]
+
+    # 酷狗: fetch heat (exponent + listener_num + collect_count)
+    kg_rows = (bp.get("kugou") or {}).get("rows") or []
+    kg_mixids = [str(r["mixsongid"]) for r in kg_rows if r.get("mixsongid")]
+
+    async def _qq_heat():
+        if not qq_mids:
+            return {}
+        return await _run_in_thread(fetch_batch_listen_users, qq_mids)
+
+    async def _kg_heat():
+        if not kg_mixids:
+            return {}
+        return await _run_in_thread(fetch_batch_kugou_heat, kg_mixids)
+
+    qq_heat, kg_heat = await _aio.gather(_qq_heat(), _kg_heat())
+
+    # 合入 QQ 结果
+    for row in qq_rows:
+        mid = row.get("song_mid", "")
+        ht = qq_heat.get(mid, {})
+        row["heat_score"] = ht.get("score") if isinstance(ht, dict) else None
+        row["listen_cnt"] = ht.get("cnt") if isinstance(ht, dict) else None
+
+    # 合入酷狗结果
+    for row in kg_rows:
+        mixid = str(row.get("mixsongid", ""))
+        ht = kg_heat.get(mixid, {})
+        row["exponent"] = ht.get("exponent")
+        row["listener_num"] = ht.get("listener_num")
+
+    return JSONResponse(data)
+
+
+@app.get("/api/smart-search")
+async def api_smart_search(
+    keyword: str = "",
+    platform: str = "qq",
+    offset: int = 0,
+    limit: int = 10,
+) -> JSONResponse:
+    """智能搜索：先按歌手名搜索，找到则拉歌手歌曲列表+热度；否则回退到快照歌曲模糊搜索。
+
+    返回统一格式：
+    {ok, mode: "artist"|"song", artist_name?, rows: [{index, song_name, song_mid?, mixsongid?,
+      favorite_count, heat_score?, listen_cnt?, exponent?, listener_num?}], has_more}
+    """
+    import asyncio as _aio
+
+    kw = (keyword or "").strip()
+    if not kw:
+        return JSONResponse({"ok": False, "error": "请输入搜索关键词"})
+    p = normalize_platform(platform)
+    limit = min(max(1, limit), 50)
+    offset = max(0, offset)
+
+    # ---------- 尝试歌手搜索 ----------
+    artist_mid = None
+    artist_name = None
+
+    if p == "qq":
+        def _search_qq():
+            with httpx.Client(timeout=10, headers={"Referer": "https://y.qq.com/", "User-Agent": "Mozilla/5.0"}) as c:
+                resp = c.get("https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg",
+                             params={"key": kw, "format": "json", "inCharset": "utf-8", "outCharset": "utf-8"})
+                resp.raise_for_status()
+                return resp.json()
+        try:
+            data = await _run_in_thread(_search_qq)
+            singers = data.get("data", {}).get("singer", {}).get("itemlist", [])
+            if singers:
+                first = singers[0]
+                # 歌手名必须包含关键词或关键词包含歌手名
+                matched_name = first.get("name", "")
+                if kw == matched_name:
+                    artist_mid = first.get("mid")
+                    artist_name = matched_name
+        except Exception:
+            pass
+
+    elif p == "netease":
+        def _search_ne():
+            from .netease_client import NeteaseMusicClient
+            c = NeteaseMusicClient()
+            try:
+                return c.search_artists_by_name(kw, limit=5)
+            finally:
+                c.close()
+        try:
+            artists = await _run_in_thread(_search_ne)
+            if artists:
+                first = artists[0]
+                matched_name = first.get("singer_name", "")
+                if kw == matched_name:
+                    artist_mid = first.get("singer_mid")
+                    artist_name = matched_name
+        except Exception:
+            pass
+
+    elif p == "kugou":
+        def _search_kg():
+            from .kugou_client import KugouMusicClient
+            c = KugouMusicClient()
+            try:
+                return c.search_artists_by_name(kw, limit=5)
+            finally:
+                c.close()
+        try:
+            artists = await _run_in_thread(_search_kg)
+            if artists:
+                first = artists[0]
+                matched_name = first.get("singer_name", "")
+                if kw == matched_name:
+                    artist_mid = first.get("singer_mid")
+                    artist_name = matched_name
+        except Exception:
+            pass
+
+    # ---------- 歌手匹配成功：拉歌曲列表 ----------
+    if artist_mid:
+        if p == "qq":
+            def _fetch_qq():
+                client = QQMusicClient(base_url="https://u.y.qq.com/cgi-bin/musicu.fcg")
+                try:
+                    return client.fetch_songs_by_artist(artist_mid, offset // limit + 1, limit)
+                finally:
+                    client.close()
+            songs = await _run_in_thread(_fetch_qq)
+            song_ids = [s.get("id") for s in songs if s.get("id")]
+            song_mids = [s.get("mid") for s in songs if s.get("mid")]
+
+            async def _fav():
+                if not song_ids:
+                    return {}
+                def _f():
+                    c = QQMusicClient(base_url="https://u.y.qq.com/cgi-bin/musicu.fcg")
+                    try:
+                        return c.fetch_song_favorite_counts(song_ids)
+                    finally:
+                        c.close()
+                return await _run_in_thread(_f)
+
+            async def _heat():
+                return await _run_in_thread(fetch_batch_listen_users, song_mids) if song_mids else {}
+
+            fav_map, heat_map = await _aio.gather(_fav(), _heat())
+            rows = []
+            for i, s in enumerate(songs):
+                sid = s.get("id")
+                smid = s.get("mid", "")
+                hl = heat_map.get(smid, {})
+                rows.append({
+                    "index": offset + i + 1,
+                    "song_name": s.get("name") or s.get("title") or "",
+                    "song_mid": smid,
+                    "favorite_count": fav_map.get(sid),
+                    "heat_score": hl.get("score") if isinstance(hl, dict) else None,
+                    "listen_cnt": hl.get("cnt") if isinstance(hl, dict) else None,
+                })
+            return JSONResponse({"ok": True, "mode": "artist", "artist_name": artist_name,
+                                 "rows": rows, "has_more": len(songs) >= limit})
+
+        elif p == "kugou":
+            def _fetch_kg():
+                from .kugou_client import KugouMusicClient
+                c = KugouMusicClient()
+                try:
+                    return c.fetch_songs_by_artist(artist_mid, offset // limit + 1, limit)
+                finally:
+                    c.close()
+            songs = await _run_in_thread(_fetch_kg)
+            mixids = [str(s.get("mixsongid")) for s in songs if s.get("mixsongid")]
+            heat_map = await _run_in_thread(fetch_batch_kugou_heat, mixids) if mixids else {}
+            rows = []
+            for i, s in enumerate(songs):
+                mixid = s.get("mixsongid")
+                ht = heat_map.get(str(mixid) if mixid is not None else "", {})
+                rows.append({
+                    "index": offset + i + 1,
+                    "song_name": s.get("name") or "",
+                    "mixsongid": mixid,
+                    "favorite_count": ht.get("collect_count"),
+                    "exponent": ht.get("exponent"),
+                    "listener_num": ht.get("listener_num"),
+                })
+            return JSONResponse({"ok": True, "mode": "artist", "artist_name": artist_name,
+                                 "rows": rows, "has_more": len(songs) >= limit})
+
+        elif p == "netease":
+            def _fetch_ne():
+                from .netease_client import NeteaseMusicClient
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                c = NeteaseMusicClient(rate_limit_qps=100)
+                try:
+                    songs = c.fetch_songs_by_artist(artist_mid, offset // limit + 1, limit)
+                    fav_map = {}
+                    song_ids = [int(s["id"]) for s in songs if s.get("id")]
+                    if song_ids:
+                        with ThreadPoolExecutor(max_workers=min(len(song_ids), 10)) as pool:
+                            futures = {pool.submit(c._fetch_song_red_count, sid): sid for sid in song_ids}
+                            for f in as_completed(futures):
+                                sid = futures[f]
+                                try:
+                                    fav_map[sid] = f.result()
+                                except Exception:
+                                    pass
+                    return songs, fav_map
+                finally:
+                    c.close()
+            songs, fav_map = await _run_in_thread(_fetch_ne)
+            rows = []
+            for i, s in enumerate(songs):
+                sid = s.get("id")
+                rows.append({
+                    "index": offset + i + 1,
+                    "song_name": s.get("name") or "",
+                    "song_id": sid,
+                    "favorite_count": fav_map.get(sid) if sid else None,
+                })
+            return JSONResponse({"ok": True, "mode": "artist", "artist_name": artist_name,
+                                 "rows": rows, "has_more": len(songs) >= limit})
+
+    # ---------- 回退：官方歌曲搜索 + 热度（并发加速） ----------
+    page_num = offset // limit + 1
+
+    if p == "qq":
+        def _search_qq_songs():
+            c = QQMusicClient(base_url="https://u.y.qq.com/cgi-bin/musicu.fcg")
+            try:
+                songs = c.search_songs_by_name(kw, page=page_num, page_size=limit)
+                song_ids = [s.get("id") for s in songs if s.get("id")]
+                fav_map = c.fetch_song_favorite_counts(song_ids) if song_ids else {}
+                return songs, fav_map
+            finally:
+                c.close()
+        songs, fav_map = await _run_in_thread(_search_qq_songs)
+        song_mids = [s.get("mid") for s in songs if s.get("mid")]
+        heat_map = await _run_in_thread(fetch_batch_listen_users, song_mids) if song_mids else {}
+
+        rows = []
+        for i, s in enumerate(songs):
+            sid = s.get("id")
+            smid = s.get("mid", "")
+            hl = heat_map.get(smid, {})
+            rows.append({
+                "index": offset + i + 1,
+                "song_name": s.get("name") or "",
+                "song_mid": smid,
+                "album_name": s.get("album_name") or "",
+                "singer_name": s.get("singer_name") or "",
+                "favorite_count": fav_map.get(sid),
+                "heat_score": hl.get("score") if isinstance(hl, dict) else None,
+                "listen_cnt": hl.get("cnt") if isinstance(hl, dict) else None,
+            })
+        return JSONResponse({"ok": True, "mode": "song", "rows": rows, "has_more": len(songs) >= limit})
+
+    elif p == "kugou":
+        def _search_kg_songs():
+            from .kugou_client import KugouMusicClient
+            c = KugouMusicClient()
+            try:
+                return c.search_songs_by_name(kw, page=page_num, page_size=limit)
+            finally:
+                c.close()
+        songs = await _run_in_thread(_search_kg_songs)
+        mixids = [str(s.get("mixsongid")) for s in songs if s.get("mixsongid")]
+        heat_map = await _run_in_thread(fetch_batch_kugou_heat, mixids) if mixids else {}
+        rows = []
+        for i, s in enumerate(songs):
+            mixid = s.get("mixsongid")
+            ht = heat_map.get(str(mixid) if mixid is not None else "", {})
+            rows.append({
+                "index": offset + i + 1,
+                "song_name": s.get("name") or "",
+                "mixsongid": mixid,
+                "album_name": s.get("album_name") or "",
+                "singer_name": s.get("singer_name") or "",
+                "favorite_count": ht.get("collect_count"),
+                "exponent": ht.get("exponent"),
+                "listener_num": ht.get("listener_num"),
+            })
+        return JSONResponse({"ok": True, "mode": "song", "rows": rows, "has_more": len(songs) >= limit})
+
+    elif p == "netease":
+        def _search_ne_songs():
+            from .netease_client import NeteaseMusicClient
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            c = NeteaseMusicClient(rate_limit_qps=100)
+            try:
+                songs = c.search_songs_by_name(kw, page=page_num, page_size=limit)
+                fav_map = {}
+                song_ids = [int(s["id"]) for s in songs if s.get("id")]
+                if song_ids:
+                    with ThreadPoolExecutor(max_workers=min(len(song_ids), 10)) as pool:
+                        futures = {pool.submit(c._fetch_song_red_count, sid): sid for sid in song_ids}
+                        for f in as_completed(futures):
+                            sid = futures[f]
+                            try:
+                                fav_map[sid] = f.result()
+                            except Exception:
+                                pass
+                return songs, fav_map
+            finally:
+                c.close()
+        songs, fav_map = await _run_in_thread(_search_ne_songs)
+        rows = []
+        for i, s in enumerate(songs):
+            sid = s.get("id")
+            rows.append({
+                "index": offset + i + 1,
+                "song_name": s.get("name") or "",
+                "song_id": sid,
+                "album_name": s.get("album_name") or "",
+                "singer_name": s.get("singer_name") or "",
+                "favorite_count": fav_map.get(sid) if sid else None,
+            })
+        return JSONResponse({"ok": True, "mode": "song", "rows": rows, "has_more": len(songs) >= limit})
+
+    return JSONResponse({"ok": False, "error": "不支持的平台", "mode": "song"})
+
+
 @app.post("/action/{action}", response_class=HTMLResponse)
 async def run_action(action: str, request: Request) -> HTMLResponse:
     form = await request.form()
@@ -430,31 +771,10 @@ async def api_debug_paths() -> JSONResponse:
     return JSONResponse(data)
 
 
-@app.post("/api/milestone-delete")
-async def api_milestone_delete(request: Request) -> JSONResponse:
-    """删除单条里程碑记录（按平台、时间、歌曲名、收藏量精确匹配）。"""
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    platform = normalize_platform(str(body.get("platform") or ""))
-    if not platform:
-        return JSONResponse({"ok": False, "error": "缺少 platform"})
-    time_str = str(body.get("time") or "").strip()
-    song_name = str(body.get("song_name") or "").strip()
-    try:
-        favorite_count = int(body.get("favorite_count"))
-    except (TypeError, ValueError):
-        return JSONResponse({"ok": False, "error": "缺少或无效的 favorite_count"})
-    data = await _run_in_thread(
-        delete_milestone_entry,
-        platform=platform,
-        time_str=time_str,
-        song_name=song_name,
-        favorite_count=favorite_count,
-        base_dir=PROJECT_ROOT,
-    )
-    return JSONResponse(data)
+
+
+_chart_cache: Dict[str, Any] = {}
+_CHART_CACHE_TTL = 30  # 秒
 
 
 @app.get("/api/report-chart")
@@ -466,6 +786,10 @@ async def api_report_chart(
 ) -> JSONResponse:
     """获取变化折线图数据：年按月、月按日、日按当天各次 run 聚合。"""
     p = normalize_platform(platform)
+    cache_key = "{}|{}|{}|{}".format(p, report_mode or "year", report_value, (report_artist_mid or "").strip())
+    cached = _chart_cache.get(cache_key)
+    if cached and _time.monotonic() - cached[1] < _CHART_CACHE_TTL:
+        return JSONResponse(cached[0])
     data = await _run_in_thread(
         get_report_chart_data,
         platform=p,
@@ -474,6 +798,7 @@ async def api_report_chart(
         artist_mid=(report_artist_mid or "").strip(),
         base_dir=PROJECT_ROOT,
     )
+    _chart_cache[cache_key] = (data, _time.monotonic())
     return JSONResponse(data)
 
 

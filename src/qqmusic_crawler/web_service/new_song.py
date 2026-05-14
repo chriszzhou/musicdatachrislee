@@ -255,6 +255,7 @@ def update_new_song_one_platform(
         song_name=NEW_SONG_NAME,
         snapshot_db=snapshot_db_str,
         metrics=[("favorite_count_text", old_fav, new_fav)],
+        publish_time=str(old_row.get("publish_time", "") or ""),
     )
     # 与 crawl_track 口径保持一致：新歌定时更新若跨越「万」档，也写入里程碑日志。
     if _favorite_milestone_should_log(platform, old_fav, new_fav, new_fav - old_fav):

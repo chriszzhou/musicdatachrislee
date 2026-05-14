@@ -341,6 +341,47 @@
       overflow-y: auto;
       padding-bottom: 4px;
     }
+    .milestone-banner {
+      margin: 0 0 12px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: linear-gradient(90deg, #eef3ff 0%, #f6f9ff 50%, #eef3ff 100%);
+      border: 1px solid #dce3f5;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a3052;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-height: 42px;
+    }
+    .milestone-banner-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .milestone-banner-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 1;
+      transition: opacity .4s;
+    }
+    .milestone-banner-text.fade-out {
+      opacity: 0;
+    }
+    body[data-theme="dark"] .milestone-banner {
+      background: linear-gradient(90deg, #1a2435 0%, #1f2a3b 50%, #1a2435 100%);
+      border-color: #2b374b;
+      color: #d3def0;
+    }
+    .milestone-banner-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
     .milestone-song-group {
       border: 1px solid #e4e9f4;
       border-radius: 10px;
@@ -359,6 +400,24 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .milestone-song-title .milestone-toggle {
+      font-size: 11px;
+      color: #93a4ba;
+      flex-shrink: 0;
+      margin-left: 8px;
+      transition: transform .2s;
+    }
+    .milestone-song-title.collapsed .milestone-toggle {
+      transform: rotate(-90deg);
+    }
+    .milestone-song-title.collapsed + table {
+      display: none;
     }
     body[data-theme="dark"] .milestone-song-group {
       border-color: #2b374b;
@@ -368,6 +427,9 @@
       color: #d3def0;
       background: linear-gradient(90deg, #1f2a3b 0%, #1a2434 100%);
       border-bottom-color: #2b374b;
+    }
+    body[data-theme="dark"] .milestone-song-title .milestone-toggle {
+      color: #5a6f87;
     }
     table.milestone-table {
       width: 100%;
@@ -388,17 +450,12 @@
     table.milestone-subtable td { font-size: 12px; }
     table.milestone-subtable { table-layout: fixed; }
     table.milestone-subtable th:nth-child(1),
-    table.milestone-subtable td:nth-child(1) { width: 46%; }
+    table.milestone-subtable td:nth-child(1) { width: 55%; }
     table.milestone-subtable th:nth-child(2),
     table.milestone-subtable td:nth-child(2) {
-      width: 28%;
+      width: 45%;
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
-    }
-    table.milestone-subtable th:nth-child(3),
-    table.milestone-subtable td:nth-child(3) {
-      width: 26%;
-      white-space: nowrap;
     }
     body[data-theme="dark"] table.milestone-table tr:nth-child(even) td { background: #141c27; }
     body[data-theme="dark"] table.milestone-subtable th { background: #1b2534; }
@@ -407,31 +464,6 @@
       text-align: center;
       color: var(--muted);
       font-size: 13px;
-    }
-    button.milestone-delete-btn {
-      font-size: 12px;
-      padding: 4px 10px;
-      min-height: auto;
-      background: #f1f4fb;
-      color: #4b5f9a;
-      box-shadow: none;
-      border: 1px solid #dce3f5;
-    }
-    button.milestone-delete-btn:hover {
-      transform: none;
-      background: #fff0f0;
-      color: #b91c1c;
-      border-color: #f5cccc;
-    }
-    body[data-theme="dark"] button.milestone-delete-btn {
-      background: rgba(154, 172, 191, 0.08);
-      color: #a9bad1;
-      border-color: #2d3a50;
-    }
-    body[data-theme="dark"] button.milestone-delete-btn:hover {
-      background: rgba(198, 93, 102, 0.14);
-      color: #d8b0b4;
-      border-color: #4a3238;
     }
     .topsongs-actions {
       margin-top: 8px;
@@ -681,6 +713,15 @@
   <div class="err">{{ error }}</div>
   {% endif %}
 
+  <div class="milestone-banner" id="milestone-banner" style="display:none;">
+    <span class="milestone-banner-icon">&#127911;</span>
+    <span class="milestone-banner-text" id="milestone-banner-text"></span>
+  </div>
+  <div class="milestone-banner" id="toplist-banner" style="display:none;">
+    <span class="milestone-banner-icon">&#127942;</span>
+    <div class="milestone-banner-lines" id="toplist-banner-lines"></div>
+  </div>
+
   <div class="home-grid">
   <div class="block block--full">
     <div class="block-head">
@@ -701,12 +742,10 @@
       <div class="home-kpi-card home-kpi-card--fans">
         <div class="home-kpi-label">总粉丝数</div>
         <div class="home-kpi-value" id="home-kpi-fans">-</div>
-        <div id="home-kpi-fans-delta"></div>
       </div>
       <div class="home-kpi-card home-kpi-card--favorite">
         <div class="home-kpi-label">总收藏数</div>
         <div class="home-kpi-value" id="home-kpi-favorite">-</div>
-        <div id="home-kpi-favorite-delta"></div>
       </div>
     </div>
     <div class="home-pie-grid">
@@ -786,13 +825,7 @@
 
   <div class="block block--full">
     <div class="block-head">
-      <h3>3) <a href="/changereport">歌手数据变化</a></h3>
-    </div>
-  </div>
-
-  <div class="block block--full">
-    <div class="block-head">
-      <h3>4) 歌曲 TOP10</h3>
+      <h3>3) 歌曲 TOP10</h3>
       <button type="button" class="block-toggle" data-target="block-topsongs-body" aria-expanded="false">显示</button>
     </div>
     <div id="block-topsongs-body" class="block-body--collapsible">
@@ -806,22 +839,7 @@
 
   <div class="block block--full">
     <div class="block-head">
-      <h3>5) 榜单数据</h3>
-      <button type="button" class="block-toggle" data-target="block-toplist-body" aria-expanded="false">显示</button>
-    </div>
-    <div id="block-toplist-body" class="block-body--collapsible">
-      <div id="toplist-history-wrap">
-        <div class="progress-text js-toplist-loading">加载中...</div>
-        <div id="toplist-history-list" class="milestone-grid" style="display:none;"></div>
-        <div id="toplist-history-empty" class="subtitle" style="display:none; padding: 12px 0;">暂无记录</div>
-        <div id="toplist-history-err" class="err" style="display:none;"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="block block--full">
-    <div class="block-head">
-      <h3>6) 里程碑</h3>
+      <h3>4) 里程碑</h3>
       <button type="button" class="block-toggle" data-target="block-milestone-body" aria-expanded="false">显示</button>
     </div>
     <div id="block-milestone-body" class="block-body--collapsible">
@@ -833,84 +851,6 @@
       </div>
     </div>
   </div>
-  </div>
-
-  <div class="block block--full">
-    <div class="block-head">
-      <h3>7) 歌手歌曲数据 (QQ音乐)</h3>
-      <button type="button" class="block-toggle" data-target="block-artist-songs-body" aria-expanded="false">显示</button>
-    </div>
-    <div id="block-artist-songs-body" class="block-body--collapsible">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <input type="text" id="artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
-        <button type="button" id="artist-search-btn"
-          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
-        <span id="artist-search-status" style="color:var(--muted);font-size:13px;"></span>
-      </div>
-      <div id="artist-songs-err" class="err" style="display:none;"></div>
-      <table id="artist-songs-table" style="display:none;">
-        <thead>
-          <tr><th>#</th><th>歌曲</th><th>收藏量</th><th>热度指数</th><th>在听人数</th></tr>
-        </thead>
-        <tbody id="artist-songs-tbody"></tbody>
-      </table>
-      <div style="text-align:center;margin-top:8px;">
-        <button type="button" id="artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="block block--full">
-    <div class="block-head">
-      <h3>8) 歌手歌曲数据 (酷狗音乐)</h3>
-      <button type="button" class="block-toggle" data-target="block-kg-artist-songs-body" aria-expanded="false">显示</button>
-    </div>
-    <div id="block-kg-artist-songs-body" class="block-body--collapsible">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <input type="text" id="kg-artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
-        <button type="button" id="kg-artist-search-btn"
-          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
-        <span id="kg-artist-search-status" style="color:var(--muted);font-size:13px;"></span>
-      </div>
-      <div id="kg-artist-songs-err" class="err" style="display:none;"></div>
-      <table id="kg-artist-songs-table" style="display:none;">
-        <thead>
-          <tr><th>#</th><th>歌曲</th><th>收藏量</th><th>酷狗指数</th><th>收听人数</th></tr>
-        </thead>
-        <tbody id="kg-artist-songs-tbody"></tbody>
-      </table>
-      <div style="text-align:center;margin-top:8px;">
-        <button type="button" id="kg-artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="block block--full">
-    <div class="block-head">
-      <h3>9) 歌手歌曲数据 (网易云音乐)</h3>
-      <button type="button" class="block-toggle" data-target="block-ne-artist-songs-body" aria-expanded="false">显示</button>
-    </div>
-    <div id="block-ne-artist-songs-body" class="block-body--collapsible">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <input type="text" id="ne-artist-search-input" placeholder="输入歌手名" value="{{ default_topsongs_artist }}"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:14px;width:160px;" />
-        <button type="button" id="ne-artist-search-btn"
-          style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;">查询</button>
-        <span id="ne-artist-search-status" style="color:var(--muted);font-size:13px;"></span>
-      </div>
-      <div id="ne-artist-songs-err" class="err" style="display:none;"></div>
-      <table id="ne-artist-songs-table" style="display:none;">
-        <thead>
-          <tr><th>#</th><th>歌曲</th><th>收藏量</th></tr>
-        </thead>
-        <tbody id="ne-artist-songs-tbody"></tbody>
-      </table>
-      <div style="text-align:center;margin-top:8px;">
-        <button type="button" id="ne-artist-songs-more-btn" style="display:none;padding:6px 18px;border:1px solid var(--border);border-radius:8px;background:var(--card-soft);color:var(--text);font-size:13px;cursor:pointer;">加载更多</button>
-      </div>
-    </div>
   </div>
 
   <script>
@@ -1041,18 +981,6 @@
         var kpiFav = document.getElementById("home-kpi-favorite");
         if (kpiFans) kpiFans.textContent = numberFmt(sumArr(fans));
         if (kpiFav) kpiFav.textContent = numberFmt(sumArr(favs));
-        // 环比变化
-        var fansDelta = sumArr(fans) - sumArr(prevFans);
-        var favDelta = sumArr(favs) - sumArr(prevFavs);
-        function deltaHtml(d) {
-          if (!d) return "";
-          var color = d > 0 ? "var(--green, #34d399)" : "var(--red, #f87171)";
-          return "<div style=\"font-size:12px;color:" + color + ";margin-top:2px;\">" + (d > 0 ? "+" : "") + numberFmt(d) + "</div>";
-        }
-        var kpiFansDelta = document.getElementById("home-kpi-fans-delta");
-        var kpiFavDelta = document.getElementById("home-kpi-favorite-delta");
-        if (kpiFansDelta) kpiFansDelta.innerHTML = sumArr(prevFans) > 0 ? deltaHtml(fansDelta) : "";
-        if (kpiFavDelta) kpiFavDelta.innerHTML = sumArr(prevFavs) > 0 ? deltaHtml(favDelta) : "";
 
         function buildSeriesData(values) {
           return values.map(function (v, idx) {
@@ -1450,7 +1378,7 @@
               } else {
                 groupToplistBySong(res.rows).forEach(function (g) {
                   html += "<div class=\"milestone-song-group\">";
-                  html += "<div class=\"milestone-song-title\" title=\"" + esc(g.songTitle) + "\">" + esc(g.songTitle) + "</div>";
+                  html += "<div class=\"milestone-song-title\" title=\"" + esc(g.songTitle) + "\" onclick=\"this.classList.toggle('collapsed')\"><span>" + esc(g.songTitle) + "</span><span class=\"milestone-toggle\">&#9660;</span></div>";
                   html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>榜单</th><th>排名</th></tr></thead><tbody>";
                   g.entries.forEach(function (row) {
                     var rank = row.rank != null ? row.rank : "-";
@@ -1474,7 +1402,8 @@
       function formatMilestoneFavorite(count) {
         var n = parseInt(count, 10);
         if (isNaN(n) || n < 0) return "-";
-        return n.toLocaleString("zh-CN");
+        var wan = Math.floor(n / 10000);
+        return wan + "万";
       }
 
       function milestoneEsc(s) {
@@ -1516,38 +1445,7 @@
       }
 
       function bindMilestoneDeleteButtons(errEl) {
-        document.querySelectorAll("#milestone-grid .milestone-delete-btn").forEach(function (btn) {
-          btn.addEventListener("click", function () {
-            var platform = btn.getAttribute("data-platform");
-            var time = btn.getAttribute("data-time");
-            var songName = btn.getAttribute("data-song-name");
-            var count = btn.getAttribute("data-favorite-count");
-            if (!platform || time === null || songName === null || !count) return;
-            btn.disabled = true;
-            fetch("/api/milestone-delete", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ platform: platform, time: time, song_name: songName, favorite_count: parseInt(count, 10) })
-            })
-              .then(function (r) { return r.json(); })
-              .then(function (data) {
-                if (data.ok) {
-                  if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
-                  loadMilestoneLogs(false);
-                } else if (errEl) {
-                  errEl.textContent = data.error || "删除失败";
-                  errEl.style.display = "block";
-                }
-              })
-              .catch(function () {
-                if (errEl) {
-                  errEl.textContent = "请求失败";
-                  errEl.style.display = "block";
-                }
-              })
-              .finally(function () { btn.disabled = false; });
-          });
-        });
+        // 已移除里程碑删除功能
       }
 
       function loadMilestoneLogs(showLoading) {
@@ -1586,15 +1484,15 @@
               } else {
                 groupMilestonesBySong(rows).forEach(function (g) {
                   html += "<div class=\"milestone-song-group\">";
-                  html += "<div class=\"milestone-song-title\" title=\"" + milestoneEsc(g.songName) + "\">" + milestoneEsc(g.songName) + "</div>";
-                  html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>时间</th><th>收藏</th><th>操作</th></tr></thead><tbody>";
+                  html += "<div class=\"milestone-song-title\" title=\"" + milestoneEsc(g.songName) + "\" onclick=\"this.classList.toggle('collapsed')\"><span>" + milestoneEsc(g.songName) + "</span><span class=\"milestone-toggle\">&#9660;</span></div>";
+                  html += "<table class=\"milestone-table milestone-subtable\"><thead><tr><th>时间</th><th>收藏</th></tr></thead><tbody>";
                   g.entries.forEach(function (e) {
                     var fav = e.favorite_count;
                     var favNum = parseInt(fav, 10);
                     var favDisplay = formatMilestoneFavorite(fav);
                     var titleExact = !isNaN(favNum) && favNum >= 10000 ? Math.floor(favNum / 10000) + "W+" : "";
                     var nameAttr = milestoneAttr(e.song_name != null ? e.song_name : "");
-                    html += "<tr><td>" + milestoneEsc(e.time || "") + "</td><td title=\"" + milestoneEsc(titleExact) + "\">" + favDisplay + "</td><td><button type=\"button\" class=\"milestone-delete-btn\" data-platform=\"" + milestoneEsc(e.platform || p.key) + "\" data-time=\"" + milestoneEsc(e.time || "") + "\" data-song-name=\"" + nameAttr + "\" data-favorite-count=\"" + (fav != null ? fav : "") + "\">删除</button></td></tr>";
+                    html += "<tr><td>" + milestoneEsc(e.time || "") + "</td><td title=\"" + milestoneEsc(titleExact) + "\">" + favDisplay + "</td></tr>";
                   });
                   html += "</tbody></table></div>";
                 });
@@ -1684,7 +1582,7 @@
         var yLabels = state.map(function (r) { return String(r.rank || "-") + ". " + r.name; });
         var vals = state.map(function (r) { return Number(r.value) || 0; });
         chart.setOption({
-          grid: { left: 6, right: 12, top: 10, bottom: 8, containLabel: true },
+          grid: { left: 6, right: 72, top: 20, bottom: 8, containLabel: true },
           tooltip: {
             trigger: "axis",
             axisPointer: { type: "shadow", shadowStyle: { color: "rgba(100,116,139,0.12)" } },
@@ -1884,116 +1782,105 @@
           .catch(function () {});
       }
 
-      loadToplistHistory(true);
       loadMilestoneLogs(true);
+      initMilestoneBanner();
       pollCrawlTrackStatus();
-      setInterval(function () {
-        loadToplistHistory(false);
-        pollCrawlTrackStatus();
-      }, 20 * 1000);
-      // ============ 歌手歌曲数据（通用） ============
-      function initArtistSongsSection(cfg) {
-        var mid = "";
-        var offset = 0;
-        var inputEl = document.getElementById(cfg.prefix + "-search-input");
-        var btnEl = document.getElementById(cfg.prefix + "-search-btn");
-        var statusEl = document.getElementById(cfg.prefix + "-search-status");
-        var errEl = document.getElementById(cfg.prefix + "-songs-err");
-        var tableEl = document.getElementById(cfg.prefix + "-songs-table");
-        var tbodyEl = document.getElementById(cfg.prefix + "-songs-tbody");
-        var moreBtn = document.getElementById(cfg.prefix + "-songs-more-btn");
 
-        btnEl.addEventListener("click", function() {
-          var name = inputEl.value.trim();
-          if (!name) return;
-          statusEl.textContent = "搜索中...";
-          errEl.style.display = "none";
-          tableEl.style.display = "none";
-          moreBtn.style.display = "none";
-          tbodyEl.innerHTML = "";
-          offset = 0;
-          fetch(cfg.searchApi + "?name=" + encodeURIComponent(name) + "&_=" + Date.now())
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (!data.ok) { statusEl.textContent = ""; errEl.textContent = data.error || "搜索失败"; errEl.style.display = "block"; return; }
-              mid = data[cfg.midField];
-              statusEl.textContent = "歌手: " + data[cfg.nameField];
-              loadMore();
-            })
-            .catch(function(e) { statusEl.textContent = ""; errEl.textContent = "请求失败: " + e.message; errEl.style.display = "block"; });
-        });
-        inputEl.addEventListener("keydown", function(e) { if (e.key === "Enter") btnEl.click(); });
-        moreBtn.addEventListener("click", function() { loadMore(); });
-
-        function loadMore() {
-          if (!mid) return;
-          moreBtn.textContent = "加载中...";
-          moreBtn.disabled = true;
-          var url = cfg.songsApi + "?" + cfg.midParam + "=" + encodeURIComponent(mid) + "&offset=" + offset + "&limit=10&_=" + Date.now();
-          fetch(url)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              moreBtn.disabled = false;
-              if (!data.ok) { errEl.textContent = data.error || "获取失败"; errEl.style.display = "block"; moreBtn.style.display = "none"; return; }
-              data.songs.forEach(function(s) {
-                var tr = document.createElement("tr");
-                tr.innerHTML = cfg.renderRow(s);
-                tbodyEl.appendChild(tr);
-              });
-              tableEl.style.display = "";
-              offset += data.songs.length;
-              if (data.has_more && data.songs.length > 0) { moreBtn.textContent = "▼ 加载更多（每次 10 条）"; moreBtn.style.display = ""; }
-              else { moreBtn.style.display = "none"; }
-            })
-            .catch(function(e) { moreBtn.disabled = false; moreBtn.textContent = "▼ 加载更多"; errEl.textContent = "请求失败: " + e.message; errEl.style.display = "block"; });
+      // ============ 里程碑横幅 + 榜单横幅 ============
+      function startBannerRotation(bannerId, textId, items) {
+        var banner = document.getElementById(bannerId);
+        var textEl = document.getElementById(textId);
+        if (!banner || !textEl || !items.length) return;
+        banner.style.display = "flex";
+        var idx = 0;
+        textEl.textContent = items[0];
+        if (items.length > 1) {
+          setInterval(function () {
+            textEl.classList.add("fade-out");
+            setTimeout(function () {
+              idx = (idx + 1) % items.length;
+              textEl.textContent = items[idx];
+              textEl.classList.remove("fade-out");
+            }, 400);
+          }, 3000);
         }
       }
 
-      // QQ音乐
-      initArtistSongsSection({
-        prefix: "artist",
-        searchApi: "/api/search-artist",
-        songsApi: "/api/artist-songs-heat",
-        midField: "artist_mid", nameField: "artist_name", midParam: "artist_mid",
-        renderRow: function(s) {
-          var nameHtml = s.song_mid
-            ? "<a href=\"/song-heat?mid=" + encodeURIComponent(s.song_mid) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
-            : escapeHtml(s.song_name);
-          return "<td>" + s.index + "</td><td>" + nameHtml + "</td>"
-            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
-            + "<td>" + (s.heat_index != null ? numberFmt(s.heat_index) : "-") + "</td>"
-            + "<td>" + (s.now_listen_users != null ? numberFmt(s.now_listen_users) : "-") + "</td>";
-        }
-      });
+      function initMilestoneBanner() {
+        var PLAT_NAMES = { qq: "QQ音乐", netease: "网易云音乐", kugou: "酷狗音乐" };
+        var now = new Date();
+        var curMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+        var monthNames = ["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
+        var monthLabel = monthNames[now.getMonth()];
 
-      // 酷狗音乐
-      initArtistSongsSection({
-        prefix: "kg-artist",
-        searchApi: "/api/search-artist-kugou",
-        songsApi: "/api/artist-songs-heat-kugou",
-        midField: "singerid", nameField: "singername", midParam: "singerid",
-        renderRow: function(s) {
-          var nameHtml = s.mixsongid
-            ? "<a href=\"/song-heat-kugou?mixsongid=" + encodeURIComponent(String(s.mixsongid)) + "\" target=\"_blank\" style=\"color:var(--primary);text-decoration:underline;\">" + escapeHtml(s.song_name) + "</a>"
-            : escapeHtml(s.song_name);
-          return "<td>" + s.index + "</td><td>" + nameHtml + "</td>"
-            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>"
-            + "<td>" + (s.exponent != null ? numberFmt(Math.round(s.exponent)) : "-") + "</td>"
-            + "<td>" + (s.listener_num != null ? numberFmt(s.listener_num) : "-") + "</td>";
-        }
-      });
+        var p1 = fetch("/api/milestone-logs?limit=200").then(function(r){return r.json();}).catch(function(){return null;});
+        var p2 = fetch("/api/toplist-check-history?limit=100&_=" + Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
 
-      // 网易云音乐
-      initArtistSongsSection({
-        prefix: "ne-artist",
-        searchApi: "/api/search-artist-netease",
-        songsApi: "/api/artist-songs-heat-netease",
-        midField: "artist_id", nameField: "artist_name", midParam: "artist_id",
-        renderRow: function(s) {
-          return "<td>" + s.index + "</td><td>" + escapeHtml(s.song_name) + "</td>"
-            + "<td>" + (s.favorite_count != null ? numberFmt(s.favorite_count) : "-") + "</td>";
-        }
-      });
+        Promise.all([p1, p2]).then(function(results) {
+          var mData = results[0], tData = results[1];
+          var milestoneItems = [];
+          var toplistItems = [];
+
+          // 里程碑：按 (平台, 歌名) 统计当月新增万数和最高万档
+          if (mData && mData.ok && mData.by_platform) {
+            var songStats = {};
+            ["qq", "netease", "kugou"].forEach(function (plat) {
+              (mData.by_platform[plat] || []).forEach(function (e) {
+                var t = String(e.time || "");
+                if (t.slice(0, 7) !== curMonth) return;
+                var fav = parseInt(e.favorite_count, 10);
+                if (isNaN(fav) || fav < 10000) return;
+                var wan = Math.floor(fav / 10000);
+                var k = plat + "|" + (e.song_name || "");
+                if (!songStats[k]) songStats[k] = { plat: plat, name: e.song_name || "", max: 0, count: 0 };
+                songStats[k].count++;
+                if (wan > songStats[k].max) songStats[k].max = wan;
+              });
+            });
+            Object.keys(songStats).forEach(function (k) {
+              var s = songStats[k];
+              var label = s.name + "【" + (PLAT_NAMES[s.plat] || s.plat) + "】：" + monthLabel + "突破" + s.max + "万(新增" + s.count + "万)";
+              milestoneItems.push(label);
+            });
+          }
+
+          // 榜单
+          if (tData && tData.ok && Array.isArray(tData.runs) && tData.runs.length) {
+            var run = tData.runs[0];
+            (run.results || []).forEach(function (res) {
+              var plat = res.platform;
+              if (!res.ok || !res.rows) return;
+              res.rows.forEach(function (row) {
+                var songName = String(row.song_name || "").trim();
+                if (!songName) return;
+                var topName = String(row.top_name || "").trim() || "-";
+                var rank = row.rank != null ? row.rank : "-";
+                var topType = isWeeklyToplistRow(row) ? "周榜" : "日榜";
+                var label = songName + "【" + (PLAT_NAMES[plat] || plat) + "】：" + topName + "（" + topType + "）第" + rank + "名";
+                toplistItems.push(label);
+              });
+            });
+          }
+
+          startBannerRotation("milestone-banner", "milestone-banner-text", milestoneItems);
+
+          // 榜单横幅：一次性显示所有行
+          if (toplistItems.length) {
+            var tlBanner = document.getElementById("toplist-banner");
+            var tlLines = document.getElementById("toplist-banner-lines");
+            if (tlBanner && tlLines) {
+              tlLines.innerHTML = toplistItems.map(function (t) {
+                return "<div>" + t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") + "</div>";
+              }).join("");
+              tlBanner.style.display = "flex";
+            }
+          }
+        });
+      }
+
+      setInterval(function () {
+        pollCrawlTrackStatus();
+      }, 20 * 1000);
 
     })();
   </script>

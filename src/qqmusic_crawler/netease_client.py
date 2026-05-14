@@ -155,6 +155,45 @@ class NeteaseMusicClient:
             )
         return result
 
+    def search_songs_by_name(self, keyword: str, page: int = 1, page_size: int = 10) -> List[Dict[str, Any]]:
+        """通过歌曲名搜索歌曲（网易云搜索接口 type=1）。"""
+        kw = (keyword or "").strip()
+        if not kw:
+            return []
+        offset = max(page - 1, 0) * page_size
+        data = self._get_json(
+            "/api/search/get/web",
+            {"s": kw, "type": "1", "offset": str(offset), "limit": str(max(page_size, 1))},
+        )
+        result_node = data.get("result", {})
+        if isinstance(result_node, str):
+            try:
+                result_node = json.loads(result_node)
+            except Exception:
+                result_node = {}
+        if not isinstance(result_node, dict):
+            result_node = {}
+        songs = result_node.get("songs", [])
+        if not isinstance(songs, list):
+            return []
+        result: List[Dict[str, Any]] = []
+        for item in songs:
+            if not isinstance(item, dict):
+                continue
+            sid = item.get("id")
+            name = str(item.get("name") or "").strip()
+            album = item.get("album", {})
+            album_name = str(album.get("name") or "").strip() if isinstance(album, dict) else ""
+            artists = item.get("artists", [])
+            singer_name = ", ".join(str(a.get("name", "")) for a in artists if isinstance(a, dict)) if isinstance(artists, list) else ""
+            result.append({
+                "id": sid,
+                "name": name,
+                "album_name": album_name,
+                "singer_name": singer_name,
+            })
+        return result
+
     def fetch_songs_by_artist(
         self, artist_mid: str, page: int, page_size: int
     ) -> List[Dict[str, Any]]:

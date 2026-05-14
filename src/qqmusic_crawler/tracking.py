@@ -38,8 +38,10 @@ def _append_favorite_milestone_log(log_path: Path, song_name: str, favorite_coun
         log_path.parent.mkdir(parents=True, exist_ok=True)
         name_safe = (song_name or "").strip().replace("\n", " ").replace("\r", " ") or "-"
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 记录跨越的最高万档（10000 的整数倍）
+        milestone_value = (favorite_count // 10_000) * 10_000
         with open(log_path, "a", encoding="utf-8") as f:
-            f.write("{} {} {}\n".format(ts, name_safe, favorite_count))
+            f.write("{} {} {}\n".format(ts, name_safe, milestone_value))
     except OSError:
         pass
 
@@ -75,16 +77,17 @@ def _read_artist_songs(db_file: Path, artist_mid: str) -> Dict[str, Dict[str, ob
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT song_mid, name, favorite_count_text
+            SELECT song_mid, name, favorite_count_text, publish_time
             FROM songs
             WHERE artist_mid = ?
             """,
             (artist_mid,),
         )
-        for song_mid, name, favorite_count_text in cur.fetchall():
+        for song_mid, name, favorite_count_text, publish_time in cur.fetchall():
             songs[str(song_mid)] = {
                 "name": name or "",
                 "favorite_count_text": _parse_count_value(favorite_count_text),
+                "publish_time": publish_time or "",
             }
     finally:
         conn.close()
@@ -128,6 +131,41 @@ def _table_name(base: str, month_key: str) -> str:
     return "{}_m{}".format(base, month_key)
 
 
+_migrated_is_init_tables: set = set()
+
+
+def _migrate_add_is_init(conn: sqlite3.Connection, table: str) -> None:
+    """为旧表添加 is_init 列（如果不存在），并将 old_value=0 的旧记录标记为 is_init=1。"""
+    if table in _migrated_is_init_tables:
+        return
+    cols = {row[1] for row in conn.execute("PRAGMA table_info({})".format(table)).fetchall()}
+    if "is_init" in cols:
+        _migrated_is_init_tables.add(table)
+        return
+    conn.execute("ALTER TABLE {} ADD COLUMN is_init INTEGER NOT NULL DEFAULT 0".format(table))
+    conn.execute("UPDATE {} SET is_init = 1 WHERE old_value = 0".format(table))
+    _migrated_is_init_tables.add(table)
+
+
+_INIT_THRESHOLD_DAYS = 7
+
+
+def _is_init_metric(old_v: int, publish_time: str, run_at: str) -> int:
+    """判断歌曲指标变化是否为初始化记录。old_value=0 且发布超过7天视为初始化。"""
+    if old_v != 0:
+        return 0
+    if not publish_time:
+        return 1
+    try:
+        pub_date = datetime.strptime(publish_time[:10], "%Y-%m-%d")
+        run_date = datetime.strptime(run_at[:10], "%Y-%m-%d")
+        if (run_date - pub_date).days > _INIT_THRESHOLD_DAYS:
+            return 1
+    except (ValueError, IndexError):
+        return 1
+    return 0
+
+
 def _ensure_month_table(conn: sqlite3.Connection, base: str, month_key: str) -> None:
     """确保指定月份的基表存在（如 metric_changes_m202503）。"""
     table = _table_name(base, month_key)
@@ -158,10 +196,12 @@ def _ensure_month_table(conn: sqlite3.Connection, base: str, month_key: str) -> 
                 old_value INTEGER NOT NULL,
                 new_value INTEGER NOT NULL,
                 delta INTEGER NOT NULL,
-                snapshot_db TEXT NOT NULL
+                snapshot_db TEXT NOT NULL,
+                is_init INTEGER NOT NULL DEFAULT 0
             )
             """.format(table)
         )
+        _migrate_add_is_init(conn, table)
     elif base == "artist_metric_changes":
         conn.execute(
             """
@@ -174,10 +214,12 @@ def _ensure_month_table(conn: sqlite3.Connection, base: str, month_key: str) -> 
                 old_value INTEGER NOT NULL,
                 new_value INTEGER NOT NULL,
                 delta INTEGER NOT NULL,
-                snapshot_db TEXT NOT NULL
+                snapshot_db TEXT NOT NULL,
+                is_init INTEGER NOT NULL DEFAULT 0
             )
             """.format(table)
         )
+        _migrate_add_is_init(conn, table)
     conn.commit()
 
 
@@ -349,10 +391,12 @@ def insert_metric_changes_for_song(
     song_name: str,
     snapshot_db: str,
     metrics: Iterable[Tuple[str, int, int]],
+    publish_time: str = "",
 ) -> int:
     """写入单首歌曲的 metric 变化记录（用于新歌页定时更新）。metrics: [(metric_name, old_value, new_value), ...]。"""
     rows = [
-        (song_mid, song_name, name, old_v or 0, new_v or 0, (new_v or 0) - (old_v or 0))
+        (song_mid, song_name, name, old_v or 0, new_v or 0, (new_v or 0) - (old_v or 0),
+         _is_init_metric(old_v or 0, publish_time, run_at))
         for name, old_v, new_v in metrics
     ]
     conn = connect_sqlite(changes_db_file)
@@ -368,11 +412,11 @@ def _insert_metric_change_rows(
     run_at: str,
     artist_mid: str,
     snapshot_db: str,
-    rows: Iterable[Tuple[str, str, str, int, int, int]],
+    rows: Iterable[Tuple[str, str, str, int, int, int, int]],
 ) -> int:
     payload = [
-        (run_at, artist_mid, song_mid, song_name, metric, old_v, new_v, delta, snapshot_db)
-        for song_mid, song_name, metric, old_v, new_v, delta in rows
+        (run_at, artist_mid, song_mid, song_name, metric, old_v, new_v, delta, snapshot_db, is_init)
+        for song_mid, song_name, metric, old_v, new_v, delta, is_init in rows
     ]
     if not payload:
         return 0
@@ -383,9 +427,9 @@ def _insert_metric_change_rows(
         """
         INSERT INTO {} (
             run_at, artist_mid, song_mid, song_name, metric,
-            old_value, new_value, delta, snapshot_db
+            old_value, new_value, delta, snapshot_db, is_init
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.format(table),
         payload,
     )
@@ -398,11 +442,11 @@ def _insert_artist_metric_change_rows(
     run_at: str,
     artist_mid: str,
     snapshot_db: str,
-    rows: Iterable[Tuple[str, str, int, int, int]],
+    rows: Iterable[Tuple[str, str, int, int, int, int]],
 ) -> int:
     payload = [
-        (run_at, artist_mid, artist_name, metric, old_v, new_v, delta, snapshot_db)
-        for artist_name, metric, old_v, new_v, delta in rows
+        (run_at, artist_mid, artist_name, metric, old_v, new_v, delta, snapshot_db, is_init)
+        for artist_name, metric, old_v, new_v, delta, is_init in rows
     ]
     if not payload:
         return 0
@@ -413,9 +457,9 @@ def _insert_artist_metric_change_rows(
         """
         INSERT INTO {} (
             run_at, artist_mid, artist_name, metric,
-            old_value, new_value, delta, snapshot_db
+            old_value, new_value, delta, snapshot_db, is_init
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """.format(table),
         payload,
     )
@@ -461,28 +505,35 @@ def track_changes_for_artist(
             old_v = int(prev_item.get(metric, 0) or 0)
             new_v = int(curr_item.get(metric, 0) or 0)
             delta = new_v - old_v
-            if delta != 0:
-                song_name = str(curr_item.get("name", "") or prev_item.get("name", ""))
-                metric_changes.append(
-                    (
-                        song_mid,
-                        song_name,
-                        metric,
-                        old_v,
-                        new_v,
-                        delta,
-                    )
+            if delta == 0:
+                continue
+            # 抖动预防：API 临时返回 0 不记录，等下次恢复后自然跳过
+            if new_v == 0 and old_v > 0:
+                continue
+            song_name = str(curr_item.get("name", "") or prev_item.get("name", ""))
+            publish_time = str(curr_item.get("publish_time", "") or "")
+            is_init = _is_init_metric(old_v, publish_time, run_at)
+            metric_changes.append(
+                (
+                    song_mid,
+                    song_name,
+                    metric,
+                    old_v,
+                    new_v,
+                    delta,
+                    is_init,
                 )
-                if metric == "favorite_count_text" and _favorite_milestone_should_log(
-                    platform, old_v, new_v, delta
-                ):
-                    _append_favorite_milestone_log(milestone_log, song_name, new_v)
-                    milestone_entries.append((song_name, new_v))
+            )
+            if metric == "favorite_count_text" and _favorite_milestone_should_log(
+                platform, old_v, new_v, delta
+            ):
+                _append_favorite_milestone_log(milestone_log, song_name, new_v)
+                milestone_entries.append((song_name, new_v))
 
     old_fans = int(previous_artist.get("fans", 0) or 0)
     new_fans = int(current_artist.get("fans", 0) or 0)
     fans_delta = new_fans - old_fans
-    if fans_delta != 0:
+    if fans_delta != 0 and not (new_fans == 0 and old_fans > 0):
         artist_metric_changes.append(
             (
                 str(current_artist.get("name", "") or previous_artist.get("name", "")),
@@ -490,6 +541,7 @@ def track_changes_for_artist(
                 old_fans,
                 new_fans,
                 fans_delta,
+                1 if old_fans == 0 else 0,
             )
         )
 
@@ -648,4 +700,244 @@ def report_changes(
         "metric_changes": [dict(r) for r in metric_rows],
         "artist_metric_changes": [dict(r) for r in artist_metric_rows],
     }
+
+
+_COMPACT_KEEP_DAYS = 7
+
+
+def compact_old_changes(changes_db_file: Path, keep_days: int = _COMPACT_KEEP_DAYS) -> Dict[str, int]:
+    """清理变化表：1) 删除数据抖动（同一天净变化为0的记录）；
+    2) 超过 keep_days 天的记录每天只保留一条合并记录；
+    3) 重建里程碑日志。
+    返回 {表名: 删除行数}。
+    """
+    from datetime import timedelta
+
+    cutoff = (datetime.now() - timedelta(days=keep_days)).strftime("%Y-%m-%d")
+    changes_db_file.parent.mkdir(parents=True, exist_ok=True)
+    conn = connect_sqlite(changes_db_file)
+    result: Dict[str, int] = {}
+    try:
+        _ensure_changes_tables(conn)
+
+        for base in ("metric_changes", "artist_metric_changes"):
+            month_keys = _list_change_month_tables(conn, base)
+            for mk in month_keys:
+                table = _table_name(base, mk)
+                _ensure_month_table(conn, base, mk)
+                jitter_del = _delete_jitter(conn, table, base)
+                deleted = _compact_table(conn, table, base, cutoff)
+                total = jitter_del + deleted
+                if total > 0:
+                    result[table] = total
+    finally:
+        conn.close()
+
+    # 重建里程碑日志
+    platform = _platform_from_changes_db(changes_db_file)
+    log_path = changes_db_file.parent / "milestone_{}.log".format(platform)
+    rebuild_milestone_log(changes_db_file, log_path)
+
+    return result
+
+
+def _delete_jitter(conn: sqlite3.Connection, table: str, base: str) -> int:
+    """删除数据抖动：同一天同一对象同一指标的净变化为0（SUM(delta)=0）且记录数>1的全部删除。"""
+    if base == "metric_changes":
+        group_cols = "date(run_at), artist_mid, song_mid, metric"
+    else:
+        group_cols = "date(run_at), artist_mid, metric"
+
+    cur = conn.execute(
+        """
+        DELETE FROM {table} WHERE ({group}) IN (
+            SELECT {group} FROM {table}
+            GROUP BY {group}
+            HAVING SUM(delta) = 0 AND COUNT(*) > 1
+        )
+        """.format(table=table, group=group_cols)
+    )
+    deleted = cur.rowcount
+    if deleted > 0:
+        conn.commit()
+    return deleted
+
+
+def _compact_table(
+    conn: sqlite3.Connection, table: str, base: str, cutoff: str,
+) -> int:
+    """对单张表执行合并：date(run_at) < cutoff 的记录按天+分组键合并。"""
+
+    if base == "metric_changes":
+        group_cols = "date(run_at), artist_mid, song_mid, metric, is_init"
+        insert_cols = "run_at, artist_mid, song_mid, song_name, metric, old_value, new_value, delta, snapshot_db, is_init"
+        select_merged = """
+            SELECT
+                MAX(run_at),
+                artist_mid,
+                song_mid,
+                SUBSTR(
+                    MAX(run_at || '|' || COALESCE(song_name, '')),
+                    INSTR(MAX(run_at || '|' || COALESCE(song_name, '')), '|') + 1
+                ),
+                metric,
+                CAST(SUBSTR(
+                    MIN(run_at || '|' || CAST(old_value AS TEXT)),
+                    INSTR(MIN(run_at || '|' || CAST(old_value AS TEXT)), '|') + 1
+                ) AS INTEGER),
+                CAST(SUBSTR(
+                    MAX(run_at || '|' || CAST(new_value AS TEXT)),
+                    INSTR(MAX(run_at || '|' || CAST(new_value AS TEXT)), '|') + 1
+                ) AS INTEGER),
+                SUM(delta),
+                SUBSTR(
+                    MAX(run_at || '|' || snapshot_db),
+                    INSTR(MAX(run_at || '|' || snapshot_db), '|') + 1
+                ),
+                is_init
+            FROM {table}
+            WHERE date(run_at) < ?
+            GROUP BY {group}
+            HAVING COUNT(*) > 1
+        """.format(table=table, group=group_cols)
+    else:
+        group_cols = "date(run_at), artist_mid, metric, is_init"
+        insert_cols = "run_at, artist_mid, artist_name, metric, old_value, new_value, delta, snapshot_db, is_init"
+        select_merged = """
+            SELECT
+                MAX(run_at),
+                artist_mid,
+                SUBSTR(
+                    MAX(run_at || '|' || COALESCE(artist_name, '')),
+                    INSTR(MAX(run_at || '|' || COALESCE(artist_name, '')), '|') + 1
+                ),
+                metric,
+                CAST(SUBSTR(
+                    MIN(run_at || '|' || CAST(old_value AS TEXT)),
+                    INSTR(MIN(run_at || '|' || CAST(old_value AS TEXT)), '|') + 1
+                ) AS INTEGER),
+                CAST(SUBSTR(
+                    MAX(run_at || '|' || CAST(new_value AS TEXT)),
+                    INSTR(MAX(run_at || '|' || CAST(new_value AS TEXT)), '|') + 1
+                ) AS INTEGER),
+                SUM(delta),
+                SUBSTR(
+                    MAX(run_at || '|' || snapshot_db),
+                    INSTR(MAX(run_at || '|' || snapshot_db), '|') + 1
+                ),
+                is_init
+            FROM {table}
+            WHERE date(run_at) < ?
+            GROUP BY {group}
+            HAVING COUNT(*) > 1
+        """.format(table=table, group=group_cols)
+
+    merged_rows = conn.execute(select_merged, [cutoff]).fetchall()
+    if not merged_rows:
+        return 0
+
+    # 删除旧记录（有多条的那些天）
+    if base == "metric_changes":
+        delete_sql = """
+            DELETE FROM {table} WHERE date(run_at) < ?
+            AND ({group}) IN (
+                SELECT {group} FROM {table}
+                WHERE date(run_at) < ?
+                GROUP BY {group}
+                HAVING COUNT(*) > 1
+            )
+        """.format(table=table, group=group_cols)
+    else:
+        delete_sql = """
+            DELETE FROM {table} WHERE date(run_at) < ?
+            AND ({group}) IN (
+                SELECT {group} FROM {table}
+                WHERE date(run_at) < ?
+                GROUP BY {group}
+                HAVING COUNT(*) > 1
+            )
+        """.format(table=table, group=group_cols)
+
+    cur = conn.execute(delete_sql, [cutoff, cutoff])
+    deleted_count = cur.rowcount
+
+    # 插入合并后的记录
+    placeholders = ", ".join(["?"] * len(merged_rows[0]))
+    conn.executemany(
+        "INSERT INTO {table} ({cols}) VALUES ({ph})".format(
+            table=table, cols=insert_cols, ph=placeholders
+        ),
+        merged_rows,
+    )
+    conn.commit()
+
+    return deleted_count - len(merged_rows)
+
+
+def rebuild_milestone_log(changes_db_file: Path, log_path: Path) -> int:
+    """从变化表重建里程碑日志。遍历每首歌的变化记录（排除 is_init），
+    追踪收藏量，检测何时真正跨越万档。返回写入的里程碑条数。"""
+    platform = _platform_from_changes_db(changes_db_file)
+    conn = connect_sqlite(changes_db_file)
+    try:
+        _ensure_changes_tables(conn)
+        month_keys = _list_change_month_tables(conn, "metric_changes")
+        if not month_keys:
+            return 0
+
+        if len(month_keys) == 1:
+            from_clause = _table_name("metric_changes", month_keys[0])
+        else:
+            parts = ["SELECT * FROM {}".format(_table_name("metric_changes", mk)) for mk in month_keys]
+            from_clause = "({})".format(" UNION ALL ".join(parts))
+
+        # 按 song_mid 分组，按时间排序，取所有非 init 的 favorite 变化
+        rows = conn.execute(
+            """
+            SELECT run_at, song_mid, song_name, old_value, new_value
+            FROM {}
+            WHERE metric = 'favorite_count_text' AND is_init = 0
+            ORDER BY song_mid, run_at
+            """.format(from_clause)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    # 按 song_mid 分组追踪
+    # key: (song_mid, 万档) -> (run_at, song_name, new_value)
+    # 同一首歌同一万档多次跨越时只保留最后一次
+    milestone_map: Dict[tuple, tuple] = {}
+    current_mid = None
+    last_value = 0
+    step = 10_000
+
+    for run_at, song_mid, song_name, old_value, new_value in rows:
+        mid = str(song_mid or "").strip()
+        name = str(song_name or "").strip()
+        if mid != current_mid:
+            current_mid = mid
+            last_value = int(old_value or 0)
+
+        nv = int(new_value or 0)
+        if _favorite_milestone_should_log(platform, last_value, nv, nv - last_value):
+            # 找出本次跨越的最高万档
+            t = step
+            highest_t = 0
+            while t <= nv:
+                if last_value < t <= nv:
+                    highest_t = t
+                t += step
+            if highest_t > 0:
+                milestone_map[(mid, highest_t)] = (str(run_at), name, highest_t)
+        last_value = nv
+
+    entries = list(milestone_map.values())
+    entries.sort(key=lambda x: x[0])
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as f:
+        for ts, name, fav in entries:
+            f.write("{} {} {}\n".format(ts, name, fav))
+
+    return len(entries)
 

@@ -55,7 +55,8 @@ def _list_metric_change_tables(conn: sqlite3.Connection) -> List[str]:
 
 
 def _fetch_all_rows(conn: sqlite3.Connection) -> List[Tuple[str, int, str, str, str, str, str, int, int, int, str]]:
-    """返回 (table, id, run_at, artist_mid, song_mid, song_name, metric, old_value, new_value, delta, snapshot_db)。"""
+    """返回 (table, id, run_at, artist_mid, song_mid, song_name, metric, old_value, new_value, delta, snapshot_db)。
+    排除 is_init=1 的初始化记录。"""
     out: List[Tuple[str, int, str, str, str, str, str, int, int, int, str]] = []
     for table in _list_metric_change_tables(conn):
         try:
@@ -64,7 +65,7 @@ def _fetch_all_rows(conn: sqlite3.Connection) -> List[Tuple[str, int, str, str, 
                 SELECT id, run_at, artist_mid, song_mid, song_name, metric,
                        old_value, new_value, delta, snapshot_db
                 FROM {}
-                WHERE metric = 'favorite_count_text'
+                WHERE metric = 'favorite_count_text' AND (is_init IS NULL OR is_init = 0)
                 ORDER BY run_at ASC
                 """.format(table),
             ).fetchall()
@@ -124,6 +125,69 @@ def _find_outliers(
     return fixes
 
 
+def _find_oscillations(
+    series: List[Tuple[str, int, str, int, int, int, str, str, str]],
+    threshold: int,
+    artist_mid: str,
+    song_mid: str,
+    already_fixed_ids: set,
+) -> List[Tuple[str, int]]:
+    """检测"跳台阶后又跳回来"的振荡异常，只将 delta 清零。
+
+    策略一：配对 — 找到 abs(delta) > threshold 且符号相反、绝对值接近的两条记录，
+    两条都清零 delta。
+    策略二：落单 — 无法配对但 old_value 与 v_prev 偏差大、new_value 与前后一致，
+    只清零 delta。
+
+    不修改 old_value/new_value，避免级联修正。
+
+    Returns: [(table, row_id)] — 需要 SET delta=0 的记录。
+    """
+    delta_zero: List[Tuple[str, int]] = []
+    n = len(series)
+    tolerance = max(5, threshold // 10)
+    max_gap = 10
+    matched: set = set()
+
+    big_indices = [
+        i for i in range(n)
+        if abs(series[i][5]) > threshold and series[i][1] not in already_fixed_ids
+    ]
+
+    # 配对：对每个大 delta，找最近的反向抵消
+    for i in big_indices:
+        if i in matched:
+            continue
+        delta_a = series[i][5]
+        for j in big_indices:
+            if j <= i or j in matched or j - i > max_gap:
+                continue
+            delta_b = series[j][5]
+            if (delta_a > 0) == (delta_b > 0):
+                continue
+            if abs(abs(delta_a) - abs(delta_b)) <= tolerance:
+                matched.add(i)
+                matched.add(j)
+                delta_zero.append((series[i][0], series[i][1]))
+                delta_zero.append((series[j][0], series[j][1]))
+                break
+
+    # 落单：old_value 明显偏离 v_prev，但 new_value 与前后一致
+    for i in big_indices:
+        if i in matched or i == 0 or i >= n - 1:
+            continue
+        _, id_, _, old_v, new_v, _, _, _, _ = series[i]
+        v_prev = series[i - 1][4]
+        v_next = series[i + 1][4]
+        if (abs(old_v - v_prev) > threshold
+                and abs(new_v - v_prev) <= threshold
+                and abs(new_v - v_next) <= threshold):
+            delta_zero.append((series[i][0], id_))
+            matched.add(i)
+
+    return delta_zero
+
+
 def run(
     changes_db: Path,
     threshold: int = 100,
@@ -149,26 +213,37 @@ def run(
 
     grouped = _group_by_series(all_rows)
     to_update: List[Tuple[str, int, int]] = []  # (table, id, new_value)
+    to_delta_zero: List[Tuple[str, int]] = []  # (table, id) — 振荡修正，只清零 delta
     snapshot_updates: List[Tuple[str, str, str, str, int]] = []  # (snapshot_db, artist_mid, song_mid, metric, value)
     remove_from_milestone: List[Tuple[str, int]] = []  # (song_name, wrong_count) 仅 favorite_count_text
 
     for (artist_mid, song_mid, metric), series in grouped.items():
         fixes = _find_outliers(series, threshold, method, artist_mid, song_mid)
+        fixed_ids: set = set()
         for t in fixes:
             idx, row_id, table, corrected, snapshot_db, am, sm, m, wrong_new_value = t
             to_update.append((table, row_id, corrected))
+            fixed_ids.add(row_id)
             snapshot_updates.append((snapshot_db, am, sm, m, corrected))
             if m == "favorite_count_text":
-                song_name = series[idx][8]  # song_name in same row
+                song_name = series[idx][8]
                 remove_from_milestone.append((song_name.strip(), wrong_new_value))
+
+        osc_delta_zeros = _find_oscillations(series, threshold, artist_mid, song_mid, fixed_ids)
+        for table, row_id in osc_delta_zeros:
+            to_delta_zero.append((table, row_id))
 
     if dry_run:
         return {
             "updated": 0,
-            "would_update": len(to_update),
+            "would_update": len(to_update) + len(to_delta_zero),
             "fixed_rows": [
                 {"table": t, "id": i, "new_value": v}
                 for t, i, v in to_update
+            ],
+            "delta_zero_rows": [
+                {"table": t, "id": i}
+                for t, i in to_delta_zero
             ],
             "snapshot_updates": len(snapshot_updates) if fix_snapshot else 0,
             "remove_from_milestone": remove_from_milestone,
@@ -180,6 +255,11 @@ def run(
             conn.execute(
                 "UPDATE {} SET new_value = ?, delta = 0 WHERE id = ?".format(table),
                 (new_value, row_id),
+            )
+        for table, row_id in to_delta_zero:
+            conn.execute(
+                "UPDATE {} SET delta = 0 WHERE id = ?".format(table),
+                (row_id,),
             )
         conn.commit()
     finally:
@@ -241,8 +321,9 @@ def run(
                 pass
 
     return {
-        "updated": len(to_update),
+        "updated": len(to_update) + len(to_delta_zero),
         "fixed_rows": [{"table": t, "id": i, "new_value": v} for t, i, v in to_update],
+        "delta_zero_rows": [{"table": t, "id": i} for t, i in to_delta_zero],
         "remove_from_milestone": remove_from_milestone,
         "removed_log_lines": removed_log_lines,
     }

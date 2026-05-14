@@ -179,7 +179,7 @@ def fetch_batch_kugou_heat(mixsongids: List[str], timeout: int = 10) -> Dict[str
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results: Dict[str, Dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=min(len(mixsongids), 5)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(mixsongids), 10)) as pool:
         futures = {pool.submit(_fetch_one_ranking, mid, timeout): mid for mid in mixsongids}
         for future in as_completed(futures):
             mid = futures[future]

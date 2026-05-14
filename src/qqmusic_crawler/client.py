@@ -193,6 +193,38 @@ class QQMusicClient:
         data = self._post_json(payload)
         return self._extract_favorite_counts(data)
 
+    def search_songs_by_name(self, keyword: str, page: int = 1, page_size: int = 10) -> List[Dict[str, Any]]:
+        """通过歌曲名搜索歌曲（QQ音乐 client_search_cp 接口）。"""
+        self._rate_limit()
+        resp = self._client.get(
+            "https://c.y.qq.com/soso/fcgi-bin/client_search_cp",
+            params={"w": keyword, "format": "json", "p": max(page, 1), "n": max(page_size, 1), "cr": 1, "new_json": 1},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("data", {}).get("song", {}).get("list", [])
+        if not isinstance(items, list):
+            return []
+        result: List[Dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            mid = str(item.get("mid") or "").strip()
+            sid = item.get("id")
+            name = str(item.get("name") or item.get("songname") or "").strip()
+            album = item.get("album", {})
+            album_name = str(album.get("name") or "").strip() if isinstance(album, dict) else ""
+            singers = item.get("singer", [])
+            singer_name = ", ".join(str(s.get("name", "")) for s in singers if isinstance(s, dict)) if isinstance(singers, list) else ""
+            result.append({
+                "id": sid,
+                "mid": mid,
+                "name": name,
+                "album_name": album_name,
+                "singer_name": singer_name,
+            })
+        return result
+
     @staticmethod
     def _extract_artist_items(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         singer_node = data.get("singerList")

@@ -24,6 +24,7 @@ from .web_service import (
     prune_old_snapshots,
     update_new_song_one_platform,
 )
+from .tracking import compact_old_changes
 from .web_service.milestones import run_kugou_outlier_correction_until_clean
 
 BEIJING_TZ = timezone(timedelta(hours=8))
@@ -164,6 +165,28 @@ def _run_crawl_track_round() -> None:
                     f.result()
                 except Exception as e:
                     logger.warning("定时抓取-快照清理异常: {}", e)
+
+        # 变化表清理：一周前的数据每天只保留一条合并记录
+        def _compact(platform):
+            from .web_service.paths import _resolve_changes_db_path
+            db = _resolve_changes_db_path(platform, root)
+            compacted = compact_old_changes(db)
+            total_del = sum(compacted.values())
+            if total_del > 0:
+                logger.info(
+                    "定时抓取-变化表清理 {} 已合并删除 {} 条旧记录",
+                    get_platform_meta(platform)["name"],
+                    total_del,
+                )
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {pool.submit(_compact, p): p for p in SUPPORTED_PLATFORMS}
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                except Exception as e:
+                    logger.warning("定时抓取-变化表清理异常: {}", e)
+
     def _crawl_one(platform):
         result = crawl_track(
             platform=platform,
