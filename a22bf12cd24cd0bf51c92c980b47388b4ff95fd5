@@ -1,0 +1,109 @@
+scripts/common.css
+  f19b211f6af5c1df 113-114
+src/qqmusic_crawler/kugou_heat_scraper.py
+  f19b211f6af5c1df 182
+src/qqmusic_crawler/web_main.py
+  f1b871877d626676 7,776-777,789-792,801
+  f19b211f6af5c1df 377-719
+data/milestone_netease.log
+  f1b871877d626676 1-15,17-28
+src/qqmusic_crawler/tracking.py
+  f1b871877d626676 41-42,44,80,86,90,134-168,199-200,204,217-218,222,394,398-399,415,418-419,430,432,445,448-449,460,462,508-524,526-531,536,544,704-943
+src/qqmusic_crawler/netease_client.py
+  f19b211f6af5c1df 158-196
+src/qqmusic_crawler/metric_outlier_correction.py
+  f19b211f6af5c1df 58-59,68,128-190,216,222,226,229,232-234,239,244-247,259-262,324,326
+src/qqmusic_crawler/schedulers.py
+  f1b871877d626676 27,168-189
+templates/index.html
+  f1b871877d626676 344-353,355-376,403-420,431-433,453,456,716,718-719,724,1381,1448,1487-1488,1495,1786,1809-1814,1816-1817,1819-1820,1823-1825,1827-1842,1844-1859,1861-1864,1878-1880
+  f19b211f6af5c1df 354,377-384,717,720-723,828,842,1405-1406,1585,1789-1805,1821-1822,1826,1843,1860,1865-1877
+CLAUDE.md
+  f19b211f6af5c1df 1-68
+src/qqmusic_crawler/kugou_client.py
+  f19b211f6af5c1df 240-277
+src/qqmusic_crawler/web_service/reporting.py
+  f1b871877d626676 12,72-142,144-176,178-179,270-272,274,279-284,288,292-296,367-371,415,417-418,420-441,444,447-453,455-462,469,471-503
+src/qqmusic_crawler/client.py
+  f19b211f6af5c1df 196-227
+data/milestone_kugou.log
+  f1b871877d626676 1-56
+src/qqmusic_crawler/web_service/search_top.py
+  f19b211f6af5c1df 146,167,183,185,190-191,196,214,224
+templates/song_heat_kugou.html
+  f19b211f6af5c1df 98-106,108-116,119-125,129-134
+src/qqmusic_crawler/web_service/new_song.py
+  f1b871877d626676 258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.14",
+  "base_commit_sha": "a22bf12cd24cd0bf51c92c980b47388b4ff95fd5",
+  "prompts": {
+    "741ed2f62afb8d8a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ec3f0ea0-e2cd-48a4-8bfe-da6563dd0c5e",
+        "model": "default"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    },
+    "7c54729c56a5cb3a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a7a1b73-70ad-4cc3-b785-623ee29955d6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 0,
+      "accepted_lines": 0,
+      "overriden_lines": 1
+    },
+    "edc8b509ebbf57c0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e48223f-442f-4772-897c-c4afef2fe284",
+        "model": "claude-opus-4.6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    },
+    "f19b211f6af5c1df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d709de34-5925-4f5d-a326-5f4fc86b9fa8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 1474,
+      "total_deletions": 1039,
+      "accepted_lines": 707,
+      "overriden_lines": 2
+    },
+    "f1b871877d626676": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a72d8c92-a656-4299-8a6a-cad595374dde",
+        "model": "claude-opus-4.6"
+      },
+      "human_author": "chriszzhou <2452271625@qq.com>",
+      "messages": [],
+      "total_additions": 4138,
+      "total_deletions": 3730,
+      "accepted_lines": 772,
+      "overriden_lines": 0
+    }
+  }
+}
