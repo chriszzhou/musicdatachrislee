@@ -111,11 +111,6 @@
       if (d.rank != null) metrics.push({label: "今日排名", value: "#" + d.rank, cls: ""});
       if (d.yesterday_index != null) metrics.push({label: "昨日热度", value: d.yesterday_index.toLocaleString(), cls: ""});
       if (d.yesterday_rank != null) metrics.push({label: "昨日排名", value: "#" + d.yesterday_rank, cls: ""});
-      if (d.index_rate != null) {
-        var pct = (d.index_rate * 100).toFixed(1) + "%";
-        var cls = d.index_rate >= 0 ? "up" : "down";
-        metrics.push({label: "指数变化", value: (d.index_rate >= 0 ? "+" : "") + pct, cls: cls});
-      }
       if (d.now_listen_users != null) metrics.push({label: "当前在听", value: d.now_listen_users.toLocaleString() + "人", cls: ""});
 
       var grid = document.getElementById("metrics-grid");
